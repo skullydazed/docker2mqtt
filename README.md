@@ -49,7 +49,7 @@ You can use environment variables to control the behavior.
 
 Data is published to the topic `docker/<DOCKER2MQTT_HOSTNAME>/<container>` using JSON serialization. It will arrive whenever a change happens and takes the following form:
 
-```json
+```yaml
 {
     'name': <Container Name>,
     'image': <Container Image>,
