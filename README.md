@@ -4,9 +4,9 @@ This program uses `docker events` to watch for changes in your docker containers
 
 # Running
 
-Use docker to launch this. A typical invocation is:
+Use docker to launch this. Please note that you must give it access to your docker socket, which is typically located at `/var/run/docker.sock`. A typical invocation is:
 
-    docker run --network mqtt -e MQTT_HOST=mosquitto skullydazed/docker2mqtt
+    docker run --network mqtt -e MQTT_HOST=mosquitto -v /var/run/docker.sock:/var/run/docker.sock skullydazed/docker2mqtt
 
 You can also use docker compose:
 ```yaml
@@ -26,6 +26,10 @@ services:
     - MQTT_TOPIC_PREFIX=docker
     - MQTT_QOS=1
     restart: always
+    volumes:
+    - type: volume
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
 ```
 
 # Configuration
