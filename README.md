@@ -61,3 +61,5 @@ Data is published to the topic `docker/<DOCKER2MQTT_HOSTNAME>/<container>` using
 # Home Assistant
 
 After you start the service binary sensors should show up in Home Assistant immediately. Look for sensors that start with `binary_sensor.docker`. Metadata about the container will be available as attributes, which you can then expose using template sensors if you wish. 
+
+![Screenshot of Home Assistant sensor showing status and attributes.](ha_screenshot.png)
