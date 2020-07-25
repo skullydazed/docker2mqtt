@@ -22,6 +22,8 @@ services:
     - MQTT_CLIENT_ID=docker2mqtt
     - MQTT_HOST=mosquitto
     - MQTT_PORT=1883
+    - MQTT_USER=username
+    - MQTT_PASSWD=password
     - MQTT_TIMEOUT=30
     - MQTT_TOPIC_PREFIX=docker
     - MQTT_QOS=1
@@ -45,6 +47,8 @@ You can use environment variables to control the behavior.
 | `MQTT_CLIENT_ID` | `mqtt2discord` | The client id to send to the MQTT broker. |
 | `MQTT_HOST` | `localhost` | The MQTT broker to connect to. |
 | `MQTT_PORT` | `1883` | The port on the broker to connect to. |
+| `MQTT_USER` | `` | The user to send to the MQTT broker. Leave unset to disable authentication. |
+| `MQTT_PASSWD` | `` | The password to send to the MQTT broker. Leave unset to disable authentication. |
 | `MQTT_TIMEOUT` | `30` | The timeout for the MQTT connection. |
 | `MQTT_TOPIC_PREFIX` | `ping` | The MQTT topic prefix. With the default data will be published to `ping/<hostname>`. |
 | `MQTT_QOS` | `1` | The MQTT QOS level |

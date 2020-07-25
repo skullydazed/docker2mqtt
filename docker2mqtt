@@ -18,6 +18,8 @@ DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
 HOMEASSISTANT_PREFIX = environ.get('HOMEASSISTANT_PREFIX', 'homeassistant')
 DOCKER2MQTT_HOSTNAME = environ.get('DOCKER2MQTT_HOSTNAME', gethostname())
 MQTT_CLIENT_ID = environ.get('MQTT_CLIENT_ID', 'docker2mqtt')
+MQTT_USER = environ.get('MQTT_USER', '')
+MQTT_PASSWD = environ.get('MQTT_PASSWD', '')
 MQTT_HOST = environ.get('MQTT_HOST', 'localhost')
 MQTT_PORT = int(environ.get('MQTT_PORT', '1883'))
 MQTT_TIMEOUT = int(environ.get('MQTT_TIMEOUT', '30'))
@@ -86,6 +88,7 @@ def readline_thread():
 if __name__ == '__main__':
     # Setup MQTT
     mqtt = paho.mqtt.client.Client()
+    mqtt.username_pw_set(username=MQTT_USER,password=MQTT_PASSWD)
     mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
     mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
     mqtt.loop_start()
