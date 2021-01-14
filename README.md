@@ -52,10 +52,11 @@ You can use environment variables to control the behavior.
 | `MQTT_TIMEOUT` | `30` | The timeout for the MQTT connection. |
 | `MQTT_TOPIC_PREFIX` | `ping` | The MQTT topic prefix. With the default data will be published to `ping/<hostname>`. |
 | `MQTT_QOS` | `1` | The MQTT QOS level |
+| `MQTT_ATTRIBUTE` | `1` | To use a topic per attribute as mqtt output rather than json.
 
 # Consuming The Data
 
-Data is published to the topic `docker/<DOCKER2MQTT_HOSTNAME>/<container>` using JSON serialization. It will arrive whenever a change happens and takes the following form:
+Data is published to the topic `docker/<DOCKER2MQTT_HOSTNAME>/<container>` using JSON serialization (note 1). It will arrive whenever a change happens and takes the following form:
 
 ```yaml
 {
@@ -65,6 +66,8 @@ Data is published to the topic `docker/<DOCKER2MQTT_HOSTNAME>/<container>` using
     'state': <'on' or 'off'>
 }
 ```
+
+Note 1: Unless MQTT_ATTRIBUTE is set in which topics will list in full eg `docker/<DOCKER2MQTT_HOSTNAME>/<container>/name` with payload of `<container Name>`, `docker/<DOCKER2MQTT_HOSTNAME>/<container>/image` with payload of `<Container Image>`
 
 # Home Assistant
 
