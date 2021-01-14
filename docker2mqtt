@@ -80,6 +80,8 @@ def register_container(container_entry):
     else:
         #MQTT topic per field - works for openhab better
         for entry in container_entry:
+            #print("================= entry")
+            #print(entry)
             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}/{entry}',container_entry[entry],retain=True)
 
 
@@ -206,7 +208,7 @@ if __name__ == '__main__':
             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
         else:
             #MQTT topic per field - works for openhab better
-            for entry in container:
-                print ("Processing container")
-                print (entry)
-                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container["name"]}/{entry}',container[entry],retain=True)
+            for entry in known_containers[container]:
+                print ("Processing container: " + container)
+                #print (entry)
+                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
