@@ -25,6 +25,7 @@ MQTT_PORT = int(environ.get('MQTT_PORT', '1883'))
 MQTT_TIMEOUT = int(environ.get('MQTT_TIMEOUT', '30'))
 MQTT_TOPIC_PREFIX = environ.get('MQTT_TOPIC_PREFIX', 'docker')
 MQTT_QOS = int(environ.get('MQTT_QOS', 1))
+MQTT_ATTRIBUTE = int(environ.get('MQTT_ATTRIBUTE',0))
 DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
 
@@ -74,7 +75,12 @@ def register_container(container_entry):
         'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
     }
     mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
-    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
+    if MQTT_ATTRIBUTE == 0:
+        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
+    else:
+        #MQTT topic per field - works for openhab better
+        for entry in container_entry:
+            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}/{entry}',container_entry[entry],retain=True)
 
 
 def readline_thread():
