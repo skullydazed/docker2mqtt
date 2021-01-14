@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "Python: Events",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/docker2mqtt",
@@ -13,11 +13,11 @@
             "env": {
                 "DOCKER2MQTT_HOSTNAME": "namo",
                 "MQTT_CLIENT_ID": "d2m-namo",
-                "MQTT_HOST": "mqtt.andc.nz",
+                "MQTT_HOST": "localhost",
                 "MQTT_PORT": "1883",
                 "MQTT_TOPIC_PREFIX": "docker",
                 "MQTT_ATTRIBUTE": "0"
-            },
+            }
         }
     ]
 }
