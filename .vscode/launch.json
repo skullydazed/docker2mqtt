@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Events",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/docker2mqtt",
+            "console": "integratedTerminal",
+            "env": {
+                "DOCKER2MQTT_HOSTNAME": "namo",
+                "MQTT_CLIENT_ID": "d2m-namo",
+                "MQTT_HOST": "localhost",
+                "MQTT_PORT": "1883",
+                "MQTT_TOPIC_PREFIX": "docker",
+                "MQTT_ATTRIBUTE": "0"
+            }
+        }
+    ]
+}
