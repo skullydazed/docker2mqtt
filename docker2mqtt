@@ -202,4 +202,11 @@ if __name__ == '__main__':
             # Don't send an MQTT packet if nothing has changed
             continue
 
-        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+        if MQTT_ATTRIBUTE == 0:
+            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+        else:
+            #MQTT topic per field - works for openhab better
+            for entry in container:
+                print ("Processing container")
+                print (entry)
+                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container["name"]}/{entry}',container[entry],retain=True)
