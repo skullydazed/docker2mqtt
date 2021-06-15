@@ -117,6 +117,7 @@ if __name__ == '__main__':
     for line in docker_ps.stdout.splitlines():
         numcontainers = numcontainers + 1
         container_status = json.loads(line)
+        print("Adding container: %s length: %s" % (container_status['Names'],numcontainers))
 
         if 'Paused' in container_status['Status']:
             status_str = 'paused'
@@ -167,9 +168,10 @@ if __name__ == '__main__':
             continue
 
         if docker_events.qsize() > 0:
-            print ("Have an event to process")
+            print ("EVENT:Have an event to process")
             event = json.loads(line)
             if event['status'] not in WATCHED_EVENTS:
+                print("EVENT: Not a watched event: %s" % event['status'])
                 continue
 
             container = event['Actor']['Attributes']['name']
@@ -236,6 +238,7 @@ if __name__ == '__main__':
             #if event['status'] == 'create':
 
             if MQTT_ATTRIBUTE == 0:
+                print("EVENT: Sending mqtt payload")
                 mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
             else:
                 #MQTT topic per field - works for openhab better
