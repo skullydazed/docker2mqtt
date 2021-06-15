@@ -136,7 +136,8 @@ if __name__ == '__main__':
     docker_events = queue.Queue()
     docker_events_t = Thread(target=readline_thread, daemon=True)
     docker_events_t.start()
-
+     
+    print("Starting stats thread")
     docker_stats = queue.Queue()
     docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
     docker_stats_t.start()
