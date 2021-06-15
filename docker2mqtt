@@ -33,6 +33,7 @@ known_containers = {}
 pending_destroy_operations = {}
 docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{json .}}']
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
+docker_stats_cmd = ['docker','stats','--format','{{.}}','--no-stream']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
 
@@ -92,6 +93,13 @@ def readline_thread():
         while True:
             docker_events.put(proc.stdout.readline())
 
+def readline_stats_thread():
+    """Run docker events and continually read lines from it.
+    """
+    with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc:
+        while True:
+            docker_stats.put(proc.stdout.readline())
+
 
 if __name__ == '__main__':
     # Setup MQTT
@@ -129,11 +137,21 @@ if __name__ == '__main__':
     docker_events_t = Thread(target=readline_thread, daemon=True)
     docker_events_t.start()
 
+    docker_stats = queue.Queue()
+    docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
+    docker_stats_t.start()
+
     # Loop and wait for new events
     while True:
         # Collect and process an event from `docker events`
         try:
             line = docker_events.get(timeout=1)
+        except queue.Empty:
+            # No data right now, just move along.
+            continue
+
+        try:
+            linestats = docker_stats.get(timeout=1)
         except queue.Empty:
             # No data right now, just move along.
             continue
@@ -203,6 +221,7 @@ if __name__ == '__main__':
         else:
             # Don't send an MQTT packet if nothing has changed
             continue
+        #if event['status'] == 'create':
 
         if MQTT_ATTRIBUTE == 0:
             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
@@ -212,3 +231,6 @@ if __name__ == '__main__':
                 print ("Processing container: " + container)
                 #print (entry)
                 mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+        #if MQTT_ATTRIBUTE == 0:
+        print ("STATS: " + linestats)
+    #while True:
