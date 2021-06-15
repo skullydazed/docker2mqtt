@@ -33,7 +33,7 @@ known_containers = {}
 pending_destroy_operations = {}
 docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{json .}}']
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
-docker_stats_cmd = ['docker','stats','--format','{\"container\":\"{{ .Name }}\",\"memory\":{\"raw\":\"{{ .MemUsage }}\",\"percent\":\"{{ .MemPerc }}\"},\"cpu\":\"{{ .CPUPerc }}\"}','--no-stream']
+docker_stats_cmd = ['docker','stats','--format','{\"container\":\"{{ .Name }}\",\"memory\":{\"raw\":\"{{ .MemUsage }}\",\"percent\":\"{{ .MemPerc }}\"},\"cpu\":\"{{ .CPUPerc }}\"}']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
 
@@ -96,9 +96,10 @@ def readline_thread():
 def readline_stats_thread():
     """Run docker events and continually read lines from it.
     """
-    with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc:
+    print(docker_stats_cmd)
+    with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc2:
         while True:
-            docker_stats.put(proc.stdout.readline())
+            docker_stats.put(proc2.stdout.readline())
 
 
 if __name__ == '__main__':
@@ -110,9 +111,11 @@ if __name__ == '__main__':
     mqtt.loop_start()
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
 
+    numcontainers = 0
     # Register containers with HA
     docker_ps = run(docker_ps_cmd, stdout=PIPE, text=True)
     for line in docker_ps.stdout.splitlines():
+        numcontainers = numcontainers + 1
         container_status = json.loads(line)
 
         if 'Paused' in container_status['Status']:
@@ -138,7 +141,7 @@ if __name__ == '__main__':
     docker_events_t.start()
      
     print("Starting stats thread")
-    docker_stats = queue.Queue()
+    docker_stats = queue.Queue(maxsize=numcontainers)
     docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
     docker_stats_t.start()
     print("Starting stats started")
@@ -154,6 +157,8 @@ if __name__ == '__main__':
         print("Looking for line stats")
         try:
             linestats = docker_stats.get(timeout=1)
+            print(linestats)
+            print(docker_stats.qsize())
         except queue.Empty:
             # No data right now, just move along.
             continue
