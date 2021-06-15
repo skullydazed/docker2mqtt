@@ -151,18 +151,22 @@ if __name__ == '__main__':
         try:
             print("Looking for line events")
             line = docker_events.get(timeout=1)
+            print("After line events: %s" % docker_events.qsize() )
         except queue.Empty:
             # No data right now, just move along.
-            continue
+            print ("Line continue")
+            pass
         print("Looking for line stats")
         try:
             linestats = docker_stats.get(timeout=1)
             print(linestats)
-            print(docker_stats.qsize())
+            print("Stats length: %s" % docker_stats.qsize())
         except queue.Empty:
             # No data right now, just move along.
             continue
- 
+
+        if docker_events.qsize() == 0: continue
+
         event = json.loads(line)
         if event['status'] not in WATCHED_EVENTS:
             continue
