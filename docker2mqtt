@@ -256,16 +256,20 @@ if __name__ == '__main__':
         if docker_stats.qsize() > 0:
             print("STATS: loading line as JSON: " + linestats)
             if linestats:
-                linestats = linestats.decode('utf-8').replace('\n','').replace('\r','')
-                stat = json.loads(linestats)
-                print("STATS: loaded json")
-                print(stat)
-                container = stat['Name']
-                known_containers[container]['memory'] = stat['MemUsage']
-                known_containers[container]['cpu'] = stat['CPUPerc']
-                known_containers[container]['netio'] = stat['NetIO']
-                print("STATS: printing container")
-                print(known_containers[container])
+                linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r')
+                try:
+                  stat = json.loads(linestats)
+                  print("STATS: loaded json")
+                  print(stat)
+                  container = stat['Name']
+                  known_containers[container]['memory'] = stat['MemUsage']
+                  known_containers[container]['cpu'] = stat['CPUPerc']
+                  known_containers[container]['netio'] = stat['NetIO']
+                  print("STATS: printing container")
+                  print(known_containers[container])
+                except:
+                  print("STATS: error parsing linestats")
+                  pass
             else:
                 print("empty")
 
