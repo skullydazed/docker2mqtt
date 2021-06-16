@@ -170,6 +170,7 @@ if __name__ == '__main__':
         if docker_events.qsize() > 0:
             print ("EVENT:Have an event to process")
             event = json.loads(line)
+            print(event)
             if event['status'] not in WATCHED_EVENTS:
                 print("EVENT: Not a watched event: %s" % event['status'])
                 continue
@@ -248,5 +249,18 @@ if __name__ == '__main__':
                     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
             #if MQTT_ATTRIBUTE == 0:
         #if docker_events.qsize() > 0:
-        print ("STATS: %s" % linestats)
+
+        #{"container":"d2mqtt","memory":{"raw":"8.969MiB / 40MiB","percent":"22.42%"},"cpu":"0.01%"}
+
+        if docker_stats.qsize > 0:
+            stat = json.loads(linestats)
+            
+            container = stat['container']
+            known_containers[container]['memory'] = stat['memory']['raw']
+            known_containers[container]['memory'] = stat['cpu']
+            print("STATS: printing container")
+            print(known_containers[container])
+
+
+            print ("STATS: %s" % linestats)
     #while True:
