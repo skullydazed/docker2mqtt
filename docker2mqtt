@@ -252,7 +252,7 @@ if __name__ == '__main__':
 
         #{"container":"d2mqtt","memory":{"raw":"8.969MiB / 40MiB","percent":"22.42%"},"cpu":"0.01%"}
 
-        if docker_stats.qsize > 0:
+        if docker_stats.qsize() > 0:
             stat = json.loads(linestats)
             
             container = stat['container']
