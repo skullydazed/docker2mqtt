@@ -256,7 +256,8 @@ if __name__ == '__main__':
         if docker_stats.qsize() > 0:
             print("STATS: loading line as JSON")
             stat = json.loads(linestats)
-            
+            print("STATS: loaded json")
+            print(stat)
             container = stat['Name']
             known_containers[container]['memory'] = stat['MemUsage']
             known_containers[container]['cpu'] = stat['CPUPerc']
