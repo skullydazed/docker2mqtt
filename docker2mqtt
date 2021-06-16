@@ -33,7 +33,8 @@ known_containers = {}
 pending_destroy_operations = {}
 docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{json .}}']
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
-docker_stats_cmd = ['docker','stats','--format','{\"container\":\"{{ .Name }}\",\"memory\":{\"raw\":\"{{ .MemUsage }}\",\"percent\":\"{{ .MemPerc }}\"},\"cpu\":\"{{ .CPUPerc }}\"}']
+#docker_stats_cmd = ['docker','stats','--format','{\"container\":\"{{ .Name }}\",\"memory\":{\"raw\":\"{{ .MemUsage }}\",\"percent\":\"{{ .MemPerc }}\"},\"cpu\":\"{{ .CPUPerc }}\"}']
+docker_stats_cmd = ['docker','stats','--format','{{json .}}']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
 
@@ -250,14 +251,16 @@ if __name__ == '__main__':
             #if MQTT_ATTRIBUTE == 0:
         #if docker_events.qsize() > 0:
 
-        #{"container":"d2mqtt","memory":{"raw":"8.969MiB / 40MiB","percent":"22.42%"},"cpu":"0.01%"}
+        #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
 
         if docker_stats.qsize() > 0:
+            print("STATS: loading line as JSON")
             stat = json.loads(linestats)
             
-            container = stat['container']
-            known_containers[container]['memory'] = stat['memory']['raw']
-            known_containers[container]['memory'] = stat['cpu']
+            container = stat['Name']
+            known_containers[container]['memory'] = stat['MemUsage']
+            known_containers[container]['cpu'] = stat['CPUPerc']
+            known_containers[container]['netio'] = stat['NetIO']
             print("STATS: printing container")
             print(known_containers[container])
 
