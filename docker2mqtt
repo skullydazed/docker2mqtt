@@ -284,8 +284,9 @@ if __name__ == '__main__':
         if docker_stats.qsize() > 0:
             print("STATS: loading line as JSON: " + linestats)
             if linestats:
-                linestats = re.sub(f'[^{re.escape(string.printable)}]', '', linestats)
-                #linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r'),lstrip(chr(x'1b'))
+                #linestats = re.sub(f'[^{re.escape(string.printable)}]', '', linestats)
+                linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r').lstrip('[2J[H')
+                #[2J[H
                 try:
                     stat = json.loads(linestats)
                     #print("STATS: loaded json")
