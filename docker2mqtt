@@ -276,9 +276,13 @@ if __name__ == '__main__':
                         limitsymbol = matches.group('limitsymbol')
                         print("STATS MEMORY: %s Limit Symbol %s" % (container,limitsymbol))
                         used = float(matches.group('used'))
-                        print("STATS MEMORY: %s Used %f" % (container,used))
+                        if (usedsymbol == "GiB"): used = used * 1024
+                        print("STATS MEMORY: %s Used %f Mb" % (container,used))
                         limit = float(matches.group('limit'))
-                        print("STATS MEMORY: %s Limit %f" % (container,limit))
+                        if (limitsymbol == "GiB"): limit = limit * 1024
+                        print("STATS MEMORY: %s Limit %f Mb" % (container,limit))
+                        known_containers[container]['memoryused'] = used
+                        known_containers[container]['memorylimit'] = limit
                     else: #if matches is not None:
                         print("STATS no regex found")
                 
