@@ -199,7 +199,7 @@ if __name__ == '__main__':
         if docker_events.qsize() > 0:
             print ("EVENT:Have an event to process")
             try:
-                if event:
+                if line:
                     event = json.loads(line)
                     print(event)
                     if event['status'] not in WATCHED_EVENTS:
