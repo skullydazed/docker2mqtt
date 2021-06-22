@@ -327,6 +327,7 @@ if __name__ == '__main__':
                             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                 except Exception as ex:
                     print("STATS: error parsing linestats: " + str(ex))
+                    ":".join("{:02x}".format(ord(c)) for c in linestats)
                     pass
             else:
                 print("empty")
