@@ -124,8 +124,8 @@ def stat_to_value(stat,container,matches):
     limit = float(matches.group('limit'))
     if (limitsymbol == "GiB"): limit = limit * 1024
     if (limitsymbol == "GB"): limit = limit * 1024
-    if (usedsymbol == "kB"): used = used / 1024
-    if (usedsymbol == "B"): used = used / 1024 /1024
+    if (limitsymbol == "kB"): limit = limit / 1024
+    if (limitsymbol == "B"): limit = limit / 1024 /1024
     print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
     known_containers[container]['memoryused'] = used
     known_containers[container]['memorylimit'] = limit
