@@ -262,6 +262,25 @@ if __name__ == '__main__':
                   print("STATS: loaded json")
                   print(stat)
                   container = stat['Name']
+                  #"61.13MiB / 2.86GiB"
+                  regex = r"(?P<used>\d+?\.\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.\d+?)(?P<limitsymbol>[MG]iB)"
+                  print("STATS: Getting Memory from %s" % stat['MemUsage'])
+                  matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
+                  memmbused = 0
+                  memmblimit = 0
+                  if matches is not None:
+                      print("STATS MEMORY: %s Found matching regex, getting used symbol" % container)
+                      usedsymbol = matches.group('usedsymbol')
+                      print("STATS MEMORY: %s Used Symbol %s" % (container,usedsymbol))
+                      limitsymbol = matches.group('limitsymbol')
+                      print("STATS MEMORY: %s Limit Symbol %s" % (container,limitsymbol))
+                      used = float(matches.group('used'))
+                      print("STATS MEMORY: %s Used %d" % (container,used))
+                      limit = float(matches.group('limit'))
+                      print("STATS MEMORY: %s Limit %d" % (container,limit))
+
+
+
                   known_containers[container]['memory'] = stat['MemUsage']
                   known_containers[container]['cpu'] = stat['CPUPerc']
                   known_containers[container]['netio'] = stat['NetIO']
