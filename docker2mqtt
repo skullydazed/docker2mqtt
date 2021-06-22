@@ -127,8 +127,6 @@ def stat_to_value(stat,container,matches):
     if (limitsymbol == "kB"): limit = limit / 1024
     if (limitsymbol == "B"): limit = limit / 1024 /1024
     print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
-    known_containers[container]['memoryused'] = used
-    known_containers[container]['memorylimit'] = limit
     print("STATS %s: Stat for container %s is %f.1 MB from %f.1 MB" % (stat,container,used,limit))
     return used,limit
 
@@ -327,8 +325,8 @@ if __name__ == '__main__':
                             print ("Processing container: " + container)
                             #print (entry)
                             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
-                except:
-                    print("STATS: error parsing linestats")
+                except Exception as ex:
+                    print("STATS: error parsing linestats: " + str(ex))
                     pass
             else:
                 print("empty")
