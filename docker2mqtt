@@ -285,23 +285,23 @@ if __name__ == '__main__':
 
 
 
-                  known_containers[container]['memory'] = stat['MemUsage']
-                  known_containers[container]['cpu'] = stat['CPUPerc']
-                  known_containers[container]['netio'] = stat['NetIO']
-                  print("STATS: printing container")
-                  print(known_containers[container])
-                  if MQTT_ATTRIBUTE == 0:
-                      print("EVENT: Sending mqtt payload")
-                      mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
-                  else:
-                      #MQTT topic per field - works for openhab better
-                      for entry in known_containers[container]:
-                          print ("Processing container: " + container)
-                          #print (entry)
-                          mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                    known_containers[container]['memory'] = stat['MemUsage']
+                    known_containers[container]['cpu'] = stat['CPUPerc']
+                    known_containers[container]['netio'] = stat['NetIO']
+                    print("STATS: printing container")
+                    print(known_containers[container])
+                    if MQTT_ATTRIBUTE == 0:
+                        print("EVENT: Sending mqtt payload")
+                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                    else:
+                        #MQTT topic per field - works for openhab better
+                        for entry in known_containers[container]:
+                            print ("Processing container: " + container)
+                            #print (entry)
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                 except:
-                  print("STATS: error parsing linestats")
-                  pass
+                    print("STATS: error parsing linestats")
+                    pass
             else:
                 print("empty")
 
