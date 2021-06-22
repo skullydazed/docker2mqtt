@@ -285,6 +285,7 @@ if __name__ == '__main__':
             print("STATS: loading line as JSON: " + linestats)
             if linestats:
                 linestats = ''.join([c for c in linestats if ord(c) > 31 or ord(c) == 9])
+                linestats = linestats.lstrip('[2J[H')
                 print(':'.join(hex(ord(x))[2:] for x in linestats))
                 #linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r').lstrip('[2J[H')
                 #[2J[H
