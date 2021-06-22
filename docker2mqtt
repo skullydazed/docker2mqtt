@@ -285,7 +285,12 @@ if __name__ == '__main__':
             print("STATS: loading line as JSON: " + linestats)
             if linestats:
                 #linestats = re.sub(f'[^{re.escape(string.printable)}]', '', linestats)
-                linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r').lstrip('[2J[H')
+                print("BEFORE")
+                print(':'.join(hex(ord(x))[2:] for x in linestats))
+                linestats = linestats.decode('utf8').encode('ascii', errors='ignore')
+                print("AFTER")
+                print(':'.join(hex(ord(x))[2:] for x in linestats))
+                #linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r').lstrip('[2J[H')
                 #[2J[H
                 try:
                     stat = json.loads(linestats)
