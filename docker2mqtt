@@ -102,6 +102,29 @@ def readline_stats_thread():
         while True:
             docker_stats.put(proc2.stdout.readline())
 
+def stat_to_value(stat,container,matches):
+    """Converts a regex matches to two values, ie used and limit for memory
+    """
+    usedsymbol = ""
+    limitsymbol = ""
+    used = 0
+    limit = 0
+
+    print("STATS %s: %s Found matching regex, getting used symbol" % (stat,container))
+    usedsymbol = matches.group('usedsymbol')
+    print("STATS %s: %s Used Symbol %s" % (stat,container,usedsymbol))
+    limitsymbol = matches.group('limitsymbol')
+    print("STATS %s: %s Limit Symbol %s" % (stat,container,limitsymbol))
+    used = float(matches.group('used'))
+    if (usedsymbol == "GiB"): used = used * 1024
+    print("STATS %s: %s Used %f Mb" % (stat,container,used))
+    limit = float(matches.group('limit'))
+    if (limitsymbol == "GiB"): limit = limit * 1024
+    print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
+    known_containers[container]['memoryused'] = used
+    known_containers[container]['memorylimit'] = limit
+    print("STATS %s: Memory for container %s is %f.1mb from %f.1mb" % (stat,container,used,limit))
+    return used,limit
 
 if __name__ == '__main__':
     # Setup MQTT
@@ -263,31 +286,26 @@ if __name__ == '__main__':
                     print(stat)
                     container = stat['Name']
                     #"61.13MiB / 2.86GiB"
-                    regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
+                    #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
+                    regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]i?B)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]i?B)"
                     print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
                     matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
                     print("STATS after regex parse")
-                    memmbused = 0
-                    memmblimit = 0
-                    if matches is not None:
-                        print("STATS MEMORY: %s Found matching regex, getting used symbol" % container)
-                        usedsymbol = matches.group('usedsymbol')
-                        print("STATS MEMORY: %s Used Symbol %s" % (container,usedsymbol))
-                        limitsymbol = matches.group('limitsymbol')
-                        print("STATS MEMORY: %s Limit Symbol %s" % (container,limitsymbol))
-                        used = float(matches.group('used'))
-                        if (usedsymbol == "GiB"): used = used * 1024
-                        print("STATS MEMORY: %s Used %f Mb" % (container,used))
-                        limit = float(matches.group('limit'))
-                        if (limitsymbol == "GiB"): limit = limit * 1024
-                        print("STATS MEMORY: %s Limit %f Mb" % (container,limit))
-                        known_containers[container]['memoryused'] = used
-                        known_containers[container]['memorylimit'] = limit
-                    else: #if matches is not None:
-                        print("STATS no regex found")
-                
+                    memmbused,memmblimit = stat_to_value("MEMORY",container,matches)
+                    known_containers[container]['memoryused'] = memmbused
+                    known_containers[container]['memorylimit'] = memmblimit
 
+                    print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
+                    matches = re.match(regex, stat['NetIO'], re.MULTILINE)
+                    netinput,netoutput = stat_to_value("NETIO",container,matches)
+                    known_containers[container]['netinput'] = netinput
+                    known_containers[container]['netoutput'] = netoutput
 
+                    print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
+                    matches = re.match(regex, stat['BlockIO'], re.MULTILINE)
+                    blockinput,blockoutput = stat_to_value("BLOCKIO",container,matches)
+                    known_containers[container]['blockinput'] = blockinput
+                    known_containers[container]['blockoutput'] = blockoutput
 
                     known_containers[container]['memory'] = stat['MemUsage']
                     known_containers[container]['cpu'] = stat['CPUPerc']
@@ -312,3 +330,5 @@ if __name__ == '__main__':
 
             print ("STATS: %s" % linestats)
     #while True:
+
+
