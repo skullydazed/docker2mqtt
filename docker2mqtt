@@ -263,7 +263,7 @@ if __name__ == '__main__':
                     print(stat)
                     container = stat['Name']
                     #"61.13MiB / 2.86GiB"
-                    regex = r"(?P<used>\d+?\.\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.\d+?)(?P<limitsymbol>[MG]iB)"
+                    regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
                     print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
                     matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
                     print("STATS after regex parse")
