@@ -198,85 +198,92 @@ if __name__ == '__main__':
 
         if docker_events.qsize() > 0:
             print ("EVENT:Have an event to process")
-            event = json.loads(line)
-            print(event)
-            if event['status'] not in WATCHED_EVENTS:
-                print("EVENT: Not a watched event: %s" % event['status'])
-                continue
+            try:
+                if event:
+                    event = json.loads(line)
+                    print(event)
+                    if event['status'] not in WATCHED_EVENTS:
+                        print("EVENT: Not a watched event: %s" % event['status'])
+                        continue
 
-            container = event['Actor']['Attributes']['name']
+                    container = event['Actor']['Attributes']['name']
 
-            if event['status'] == 'create':
-                # Cancel any previous pending destroys and add this to known_containers.
-                print(f'Container {container} has been created.')
-                if container in pending_destroy_operations:
-                    print(f'Removing pending delete for {{container}}.')
-                    del(pending_destroy_operations[container])
+                    if event['status'] == 'create':
+                        # Cancel any previous pending destroys and add this to known_containers.
+                        print(f'Container {container} has been created.')
+                        if container in pending_destroy_operations:
+                            print(f'Removing pending delete for {{container}}.')
+                            del(pending_destroy_operations[container])
 
-                register_container({
-                    'name': container,
-                    'image': event['from'],
-                    'status': 'created',
-                    'state': 'off'
-                })
+                        register_container({
+                            'name': container,
+                            'image': event['from'],
+                            'status': 'created',
+                            'state': 'off'
+                        })
 
-            elif event['status'] == 'destroy':
-                # Add this container to pending_destroy_operations.
-                print(f'Container {container} has been destroyed.')
-                pending_destroy_operations[container] = time()
-                known_containers[container]['status'] = 'destroyed'
-                known_containers[container]['state'] = 'off'
+                    elif event['status'] == 'destroy':
+                        # Add this container to pending_destroy_operations.
+                        print(f'Container {container} has been destroyed.')
+                        pending_destroy_operations[container] = time()
+                        known_containers[container]['status'] = 'destroyed'
+                        known_containers[container]['state'] = 'off'
 
-            elif event['status'] == 'die':
-                print(f'Container {container} has stopped.')
-                known_containers[container]['status'] = 'stopped'
-                known_containers[container]['state'] = 'off'
+                    elif event['status'] == 'die':
+                        print(f'Container {container} has stopped.')
+                        known_containers[container]['status'] = 'stopped'
+                        known_containers[container]['state'] = 'off'
 
-            elif event['status'] == 'pause':
-                print(f'Container {container} has paused.')
-                known_containers[container]['status'] = 'paused'
-                known_containers[container]['state'] = 'off'
+                    elif event['status'] == 'pause':
+                        print(f'Container {container} has paused.')
+                        known_containers[container]['status'] = 'paused'
+                        known_containers[container]['state'] = 'off'
 
-            elif event['status'] == 'rename':
-                old_name = event['Actor']['Attributes']['oldName']
-                if old_name.startswith('/'):
-                    old_name = old_name[1:]
-                print(f'Container {old_name} renamed to {container}.')
-                mqtt_send(f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{old_name}/config', '', retain=True)
-                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
-                register_container({
-                    'name': container,
-                    'image': known_containers[old_name]['image'],
-                    'status': known_containers[old_name]['status'],
-                    'state': known_containers[old_name]['state']
-                })
-                del(known_containers[old_name])
+                    elif event['status'] == 'rename':
+                        old_name = event['Actor']['Attributes']['oldName']
+                        if old_name.startswith('/'):
+                            old_name = old_name[1:]
+                        print(f'Container {old_name} renamed to {container}.')
+                        mqtt_send(f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{old_name}/config', '', retain=True)
+                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
+                        register_container({
+                            'name': container,
+                            'image': known_containers[old_name]['image'],
+                            'status': known_containers[old_name]['status'],
+                            'state': known_containers[old_name]['state']
+                        })
+                        del(known_containers[old_name])
 
-            elif event['status'] == 'start':
-                print(f'Container {container} has started.')
-                known_containers[container]['status'] = 'running'
-                known_containers[container]['state'] = 'on'
+                    elif event['status'] == 'start':
+                        print(f'Container {container} has started.')
+                        known_containers[container]['status'] = 'running'
+                        known_containers[container]['state'] = 'on'
 
-            elif event['status'] == 'unpause':
-                print(f'Container {container} has unpaused.')
-                known_containers[container]['status'] = 'running'
-                known_containers[container]['state'] = 'on'
+                    elif event['status'] == 'unpause':
+                        print(f'Container {container} has unpaused.')
+                        known_containers[container]['status'] = 'running'
+                        known_containers[container]['state'] = 'on'
 
-            else:
-                # Don't send an MQTT packet if nothing has changed
-                continue
-            #if event['status'] == 'create':
+                    else:
+                        # Don't send an MQTT packet if nothing has changed
+                        continue
+                    #if event['status'] == 'create':
 
-            if MQTT_ATTRIBUTE == 0:
-                print("EVENT: Sending mqtt payload")
-                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
-            else:
-                #MQTT topic per field - works for openhab better
-                for entry in known_containers[container]:
-                    print ("Processing container: " + container)
-                    #print (entry)
-                    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
-            #if MQTT_ATTRIBUTE == 0:
+                    if MQTT_ATTRIBUTE == 0:
+                        print("EVENT: Sending mqtt payload")
+                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                    else:
+                        #MQTT topic per field - works for openhab better
+                        for entry in known_containers[container]:
+                            print ("Processing container: " + container)
+                            #print (entry)
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                    #if MQTT_ATTRIBUTE == 0:
+                #if event:
+            except Exception as eventEx:
+                print("EVENTS: error parsing line: " + str(ex))
+                print("EVENTS: ERROR parsing line: " + line)
+
         #if docker_events.qsize() > 0:
 
         #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
