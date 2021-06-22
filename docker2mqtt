@@ -166,7 +166,7 @@ if __name__ == '__main__':
         })
 
     # Start the docker events thread
-    docker_events = queue.Queue()
+    docker_events = queue.Queue(maxsize=numcontainers)
     docker_events_t = Thread(target=readline_thread, daemon=True)
     docker_events_t.start()
      
