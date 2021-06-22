@@ -276,9 +276,9 @@ if __name__ == '__main__':
                         limitsymbol = matches.group('limitsymbol')
                         print("STATS MEMORY: %s Limit Symbol %s" % (container,limitsymbol))
                         used = float(matches.group('used'))
-                        print("STATS MEMORY: %s Used %d" % (container,used))
+                        print("STATS MEMORY: %s Used %f" % (container,used))
                         limit = float(matches.group('limit'))
-                        print("STATS MEMORY: %s Limit %d" % (container,limit))
+                        print("STATS MEMORY: %s Limit %f" % (container,limit))
                     else: #if matches is not None:
                         print("STATS no regex found")
                 
