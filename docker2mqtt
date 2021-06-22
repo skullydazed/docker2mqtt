@@ -281,7 +281,7 @@ if __name__ == '__main__':
                     #if MQTT_ATTRIBUTE == 0:
                 #if event:
             except Exception as eventEx:
-                print("EVENTS: error parsing line: " + str(ex))
+                print("EVENTS: error parsing line: " + str(eventEx))
                 print("EVENTS: ERROR parsing line: " + line)
 
         #if docker_events.qsize() > 0:
