@@ -26,7 +26,10 @@ services:
     - MQTT_PASSWD=password
     - MQTT_TIMEOUT=30
     - MQTT_TOPIC_PREFIX=docker
+    - MQTT_ATTRIBUTE=1
     - MQTT_QOS=1
+    - STATS=1
+    - EVENTS=0
     restart: always
     volumes:
     - type: volume
@@ -53,6 +56,8 @@ You can use environment variables to control the behavior.
 | `MQTT_TOPIC_PREFIX` | `ping` | The MQTT topic prefix. With the default data will be published to `ping/<hostname>`. |
 | `MQTT_QOS` | `1` | The MQTT QOS level |
 | `MQTT_ATTRIBUTE` | `1` | To use a topic per attribute as mqtt output rather than json.
+| `EVENTS' | `1` | 1 Or 0 for processing events
+| `STATS' | `1` | 1 Or 0 for processing statistics
 
 # Consuming The Data
 
@@ -68,6 +73,20 @@ Data is published to the topic `docker/<DOCKER2MQTT_HOSTNAME>/<container>` using
 ```
 
 Note 1: Unless MQTT_ATTRIBUTE is set in which topics will list in full eg `docker/<DOCKER2MQTT_HOSTNAME>/<container>/name` with payload of `<container Name>`, `docker/<DOCKER2MQTT_HOSTNAME>/<container>/image` with payload of `<Container Image>`
+
+With STATS turned on you will also get the the following topics:
+```
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/memoryused: 1244.16
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/memorylimit: 1739.776
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/netinput: 0.0
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/netoutput: 0.0
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/blockinput: 217.0
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/blockoutput: 84.7
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/memory: 1.215GiB / 1.699GiB
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/cpu: 8.93%
+docker/<DOCKER2MQTT_HOSTNAME>/<container>/netio: 0B / 0B
+```
+All values are translated into Megabytes (MB)
 
 # Home Assistant
 
