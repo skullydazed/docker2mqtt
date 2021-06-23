@@ -15,7 +15,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.0.8"
+__version__ = "2.0.9"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
@@ -136,6 +136,7 @@ def stat_to_value(stat,container,matches):
     used = float(matches.group('used'))
     if (usedsymbol == "GiB"): used = used * 1024
     if (usedsymbol == "KiB"): used = used / 1024
+    if (usedsymbol == "TB"): used = used * 1024 * 1024
     if (usedsymbol == "GB"): used = used * 1024
     if (usedsymbol == "kB"): used = used / 1024
     if (usedsymbol == "B"): used = used / 1024 / 1024
@@ -145,6 +146,7 @@ def stat_to_value(stat,container,matches):
     if (limitsymbol == "GiB"): limit = limit * 1024
     if (limitsymbol == "KiB"): limit = limit /1024
     if (limitsymbol == "GB"): limit = limit * 1024
+    if (limitsymbol == "TB"): limit = limit * 1024 * 1024
     if (limitsymbol == "kB"): limit = limit / 1024
     if (limitsymbol == "B"): limit = limit / 1024 /1024
     if DEBUG: print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
