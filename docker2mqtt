@@ -6,6 +6,7 @@ import json
 import queue
 import re
 import string
+import hashlib
 from os import environ
 from socket import gethostname
 from subprocess import run, Popen, PIPE
@@ -311,7 +312,7 @@ if __name__ == '__main__':
         #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
         #{"BlockIO":"--","CPUPerc":"--","Container":"b5ad8ff32144","ID":"b5ad8ff32144","MemPerc":"--","MemUsage":"-- / --","Name":"cameraevents","NetIO":"--","PIDs":"--"}
         if docker_stats.qsize() > 0:
-            print("STATS: loading line as JSON: " + linestats)
+            if DEBUG: print("STATS: loading line as JSON: " + linestats)
             if linestats:
                 linestats = ''.join([c for c in linestats if ord(c) > 31 or ord(c) == 9])
                 linestats = linestats.lstrip('[2J[H')
@@ -321,10 +322,22 @@ if __name__ == '__main__':
                     #print("STATS: loaded json")
                     #print(stat)
                     container = stat['Name']
-                    statkey = json.dumps(stat)
+                    if DEBUG: print("STAT: GETTING STAT KEY")
+                    statkey = hashlib.md5(json.dumps(stat).encode("utf-8")).hexdigest()
                     
-                    if container not in known_containers or statkey != json.dumps(known_containers[container]):
-                        known_containers[container]['json'] = statkey
+                    haskey = False
+                    if container in known_containers and 'key' in known_containers[container]:
+                        haskey = True 
+
+                    if DEBUG: print("STAT: STATKEY: %s" % statkey)
+                    existingstatkey = ""
+                    if haskey == True: existingstatkey = known_containers[container]['key']
+                    if DEBUG: print("STAT: OLDSTAT: %s" % existingstatkey)
+
+
+                    if container not in known_containers or statkey != existingstatkey:
+                        print("STAT: Processing %s stats" % container)
+                        known_containers[container]['key'] = statkey
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
                         regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
@@ -353,7 +366,7 @@ if __name__ == '__main__':
                         if DEBUG: print("STATS: printing container")
                         if DEBUG: print(known_containers[container])
                         if MQTT_ATTRIBUTE == 0:
-                            print("EVENT: Sending mqtt payload")
+                            print("STATS: Sending mqtt payload")
                             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
                         else:
                             #MQTT topic per field - works for openhab better
