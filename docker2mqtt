@@ -14,7 +14,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.0.5"
+__version__ = "2.0.6"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
@@ -351,8 +351,8 @@ if __name__ == '__main__':
                         known_containers[container]['memory'] = stat['MemUsage']
                         known_containers[container]['cpu'] = stat['CPUPerc']
                         known_containers[container]['netio'] = stat['NetIO']
-                        print("STATS: printing container")
-                        print(known_containers[container])
+                        if DEBUG: print("STATS: printing container")
+                        if DEBUG: print(known_containers[container])
                         if MQTT_ATTRIBUTE == 0:
                             print("EVENT: Sending mqtt payload")
                             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
@@ -365,6 +365,7 @@ if __name__ == '__main__':
                                     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                     else:
                         if DEBUG: print ("STATS: Not processing record as duplicate record: %s " % linestats)
+                        print("STATS Container Skipped duplicate record for %s " % container)
                     #if stat not in known_containers[container]['json']:
 
                 except Exception as ex:
