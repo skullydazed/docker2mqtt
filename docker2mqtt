@@ -316,15 +316,14 @@ if __name__ == '__main__':
                 linestats = ''.join([c for c in linestats if ord(c) > 31 or ord(c) == 9])
                 linestats = linestats.lstrip('[2J[H')
                 #print(':'.join(hex(ord(x))[2:] for x in linestats))
-                #linestats = linestats.rstrip('\n').rstrip('\r').lstrip('\n').lstrip('\r').lstrip('[2J[H')
-                #[2J[H
                 try:
                     stat = json.loads(linestats)
                     #print("STATS: loaded json")
                     #print(stat)
                     container = stat['Name']
                     statkey = json.dumps(stat)
-                    if 'json' not in known_containers[container] or statkey not in known_containers[container]['json']:
+                    
+                    if container not in known_containers or statkey != json.dumps(known_containers[container]):
                         known_containers[container]['json'] = statkey
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
@@ -361,8 +360,7 @@ if __name__ == '__main__':
                             for entry in known_containers[container]:
                                 if DEBUG: print ("Processing container: %s entry: %s" % ( container,entry))
                                 #print (entry)
-                                if entry is not 'json':
-                                    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                     else:
                         if DEBUG: print ("STATS: Not processing record as duplicate record: %s " % linestats)
                         print("STATS Container Skipped duplicate record for %s " % container)
