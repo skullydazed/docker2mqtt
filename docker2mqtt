@@ -324,7 +324,7 @@ if __name__ == '__main__':
                     #print(stat)
                     container = stat['Name']
                     if 'json' not in known_containers[container] or stat not in known_containers[container]['json']:
-                        known_containers[container]['json'] = stat
+                        known_containers[container]['json'] = json.dumps(stat)
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
                         regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
@@ -358,9 +358,10 @@ if __name__ == '__main__':
                         else:
                             #MQTT topic per field - works for openhab better
                             for entry in known_containers[container]:
-                                if DEBUG: print ("Processing container: " + container)
+                                if DEBUG: print ("Processing container: %s entry: %s" % ( container,entry))
                                 #print (entry)
-                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                                if entry is not 'json':
+                                    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                     else:
                         if DEBUG: print ("STATS: Not processing record as duplicate record: %s " % linestats)
                     #if stat not in known_containers[container]['json']:
