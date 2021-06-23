@@ -14,7 +14,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
@@ -175,15 +175,14 @@ if __name__ == '__main__':
         })
 
     # Start the docker events thread
+    docker_events = queue.Queue(maxsize=numcontainers)
     if EVENTS == '1':
-        docker_events = queue.Queue(maxsize=numcontainers)
         docker_events_t = Thread(target=readline_thread, daemon=True)
         docker_events_t.start()
     
-     
+    docker_stats = queue.Queue(maxsize=numcontainers)
     if (STATS == '1'):
         print("Starting stats thread")
-        docker_stats = queue.Queue(maxsize=numcontainers)
         docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
         docker_stats_t.start()
         print("Starting stats started")
