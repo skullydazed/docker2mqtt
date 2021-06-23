@@ -323,8 +323,9 @@ if __name__ == '__main__':
                     #print("STATS: loaded json")
                     #print(stat)
                     container = stat['Name']
-                    if 'json' not in known_containers[container] or stat not in known_containers[container]['json']:
-                        known_containers[container]['json'] = json.dumps(stat)
+                    statkey = json.dumps(stat)
+                    if 'json' not in known_containers[container] or statkey not in known_containers[container]['json']:
+                        known_containers[container]['json'] = statkey
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
                         regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
