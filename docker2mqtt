@@ -31,6 +31,8 @@ MQTT_QOS = int(environ.get('MQTT_QOS', 1))
 MQTT_ATTRIBUTE = int(environ.get('MQTT_ATTRIBUTE',0))
 DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
+STATS = environ.get('STATS','1')
+EVENTS = environ.get('EVENTS','1')
 
 known_containers = {}
 pending_destroy_operations = {}
@@ -100,10 +102,15 @@ def readline_thread():
 def readline_stats_thread():
     """Run docker events and continually read lines from it.
     """
-    print(docker_stats_cmd)
-    with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc2:
-        while True:
-            docker_stats.put(proc2.stdout.readline())
+    try:
+        print("STATS: STARTING STATS THREAD")
+        print(docker_stats_cmd)
+        with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc2:
+            while True:
+                docker_stats.put(proc2.stdout.readline())
+    except Exception as ex:
+        print("Error Running stats thread: " + str(ex))
+        pass
 
 def stat_to_value(stat,container,matches):
     """Converts a regex matches to two values, ie used and limit for memory
@@ -168,15 +175,18 @@ if __name__ == '__main__':
         })
 
     # Start the docker events thread
-    docker_events = queue.Queue(maxsize=numcontainers)
-    docker_events_t = Thread(target=readline_thread, daemon=True)
-    docker_events_t.start()
+    if EVENTS == '1':
+        docker_events = queue.Queue(maxsize=numcontainers)
+        docker_events_t = Thread(target=readline_thread, daemon=True)
+        docker_events_t.start()
+    
      
-    print("Starting stats thread")
-    docker_stats = queue.Queue(maxsize=numcontainers)
-    docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
-    docker_stats_t.start()
-    print("Starting stats started")
+    if (STATS == '1'):
+        print("Starting stats thread")
+        docker_stats = queue.Queue(maxsize=numcontainers)
+        docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
+        docker_stats_t.start()
+        print("Starting stats started")
     # Loop and wait for new events
     while True:
         # Collect and process an event from `docker events`
@@ -350,6 +360,7 @@ if __name__ == '__main__':
 
 
             print ("STATS: %s" % linestats)
+        #if docker_stats.qsize() > 0:
     #while True:
 
 
