@@ -187,6 +187,7 @@ if __name__ == '__main__':
         docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
         docker_stats_t.start()
         print("Starting stats started")
+        
     # Loop and wait for new events
     while True:
         # Collect and process an event from `docker events`
