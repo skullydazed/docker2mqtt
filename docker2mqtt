@@ -103,8 +103,8 @@ def readline_stats_thread():
     """Run docker events and continually read lines from it.
     """
     try:
-        print("STATS: STARTING STATS THREAD")
-        print(docker_stats_cmd)
+        if DEBUG: print("STATS: STARTING STATS THREAD")
+        if DEBUG: print(docker_stats_cmd)
         with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc2:
             while True:
                 docker_stats.put(proc2.stdout.readline())
@@ -120,11 +120,17 @@ def stat_to_value(stat,container,matches):
     used = 0
     limit = 0
 
-    print("STATS %s: %s Found matching regex, getting used symbol" % (stat,container))
+    if (matches is None):
+        print("STATS %s: %s No matching regex, returning 0" % (stat,container))
+        used = 0
+        limit = 0
+        return used,limit
+
+    if DEBUG: print("STATS %s: %s Found matching regex, getting used symbol" % (stat,container))
     usedsymbol = matches.group('usedsymbol')
-    print("STATS %s: %s Used Symbol %s" % (stat,container,usedsymbol))
+    if DEBUG: print("STATS %s: %s Used Symbol %s" % (stat,container,usedsymbol))
     limitsymbol = matches.group('limitsymbol')
-    print("STATS %s: %s Limit Symbol %s" % (stat,container,limitsymbol))
+    if DEBUG: print("STATS %s: %s Limit Symbol %s" % (stat,container,limitsymbol))
     used = float(matches.group('used'))
     if (usedsymbol == "GiB"): used = used * 1024
     if (usedsymbol == "KiB"): used = used / 1024
@@ -139,7 +145,7 @@ def stat_to_value(stat,container,matches):
     if (limitsymbol == "GB"): limit = limit * 1024
     if (limitsymbol == "kB"): limit = limit / 1024
     if (limitsymbol == "B"): limit = limit / 1024 /1024
-    print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
+    if DEBUG: print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
     print("STATS %s: Stat for container %s is %f.1 MB from %f.1 MB" % (stat,container,used,limit))
     return used,limit
 
@@ -158,7 +164,7 @@ if __name__ == '__main__':
     for line in docker_ps.stdout.splitlines():
         numcontainers = numcontainers + 1
         container_status = json.loads(line)
-        print("Adding container: %s length: %s" % (container_status['Names'],numcontainers))
+        if DEBUG: print("Adding container: %s length: %s" % (container_status['Names'],numcontainers))
 
         if 'Paused' in container_status['Status']:
             status_str = 'paused'
@@ -185,34 +191,34 @@ if __name__ == '__main__':
     
     docker_stats = queue.Queue(maxsize=numcontainers)
     if (STATS == '1'):
-        print("Starting stats thread")
+        if DEBUG: print("Starting stats thread")
         docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
         docker_stats_t.start()
-        print("Starting stats started")
+        if DEBUG: print("Starting stats started")
 
     # Loop and wait for new events
     while True:
         # Collect and process an event from `docker events`
         try:
-            print("Looking for line events")
+            if DEBUG: print("Looking for line events")
             line = docker_events.get(timeout=1)
-            print("After line events: %s" % docker_events.qsize() )
+            if DEBUG: print("Events length: %s" % docker_events.qsize() )
         except queue.Empty:
             # No data right now, just move along.
-            print ("Line continue")
+            if DEBUG: print ("Line continue")
             pass
         
-        print("Looking for line stats")
+        if DEBUG: print("Looking for line stats")
         try:
             linestats = docker_stats.get(timeout=1)
-            print(linestats)
+            if DEBUG: print(linestats)
             print("Stats length: %s" % docker_stats.qsize())
         except queue.Empty:
             # No data right now, just move along.
             continue
 
         if docker_events.qsize() > 0:
-            print ("EVENT:Have an event to process")
+            if DEBUG: print ("EVENT:Have an event to process")
             try:
                 if line:
                     event = json.loads(line)
@@ -302,7 +308,7 @@ if __name__ == '__main__':
         #if docker_events.qsize() > 0:
 
         #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
-
+        #{"BlockIO":"--","CPUPerc":"--","Container":"b5ad8ff32144","ID":"b5ad8ff32144","MemPerc":"--","MemUsage":"-- / --","Name":"cameraevents","NetIO":"--","PIDs":"--"}
         if docker_stats.qsize() > 0:
             print("STATS: loading line as JSON: " + linestats)
             if linestats:
@@ -319,20 +325,20 @@ if __name__ == '__main__':
                     #"61.13MiB / 2.86GiB"
                     #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
                     regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
-                    print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
+                    if DEBUG: print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
                     matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
-                    print("STATS after regex parse")
+                    if DEBUG: print("STATS after regex parse")
                     memmbused,memmblimit = stat_to_value("MEMORY",container,matches)
                     known_containers[container]['memoryused'] = memmbused
                     known_containers[container]['memorylimit'] = memmblimit
 
-                    print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
+                    if DEBUG: print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
                     matches = re.match(regex, stat['NetIO'], re.MULTILINE)
                     netinput,netoutput = stat_to_value("NETIO",container,matches)
                     known_containers[container]['netinput'] = netinput
                     known_containers[container]['netoutput'] = netoutput
 
-                    print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
+                    if DEBUG: print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
                     matches = re.match(regex, stat['BlockIO'], re.MULTILINE)
                     blockinput,blockoutput = stat_to_value("BLOCKIO",container,matches)
                     known_containers[container]['blockinput'] = blockinput
@@ -349,7 +355,7 @@ if __name__ == '__main__':
                     else:
                         #MQTT topic per field - works for openhab better
                         for entry in known_containers[container]:
-                            print ("Processing container: " + container)
+                            if DEBUG: print ("Processing container: " + container)
                             #print (entry)
                             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                 except Exception as ex:
