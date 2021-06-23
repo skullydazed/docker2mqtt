@@ -338,6 +338,8 @@ if __name__ == '__main__':
                     if container not in known_containers or statkey != existingstatkey:
                         print("STAT: Processing %s stats" % container)
                         known_containers[container]['key'] = statkey
+                        known_containers[container]['host'] = f'{DOCKER2MQTT_HOSTNAME}'
+
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
                         regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
@@ -361,7 +363,7 @@ if __name__ == '__main__':
                         known_containers[container]['blockoutput'] = blockoutput
 
                         known_containers[container]['memory'] = stat['MemUsage']
-                        known_containers[container]['cpu'] = stat['CPUPerc']
+                        known_containers[container]['cpu'] = float(stat['CPUPerc'].strip('%'))
                         known_containers[container]['netio'] = stat['NetIO']
                         if DEBUG: print("STATS: printing container")
                         if DEBUG: print(known_containers[container])
