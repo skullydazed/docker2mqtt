@@ -14,7 +14,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = 2.0.1
+__version__ = "2.0.1"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
