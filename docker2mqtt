@@ -323,42 +323,48 @@ if __name__ == '__main__':
                     #print("STATS: loaded json")
                     #print(stat)
                     container = stat['Name']
-                    #"61.13MiB / 2.86GiB"
-                    #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
-                    regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
-                    if DEBUG: print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
-                    matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
-                    if DEBUG: print("STATS after regex parse")
-                    memmbused,memmblimit = stat_to_value("MEMORY",container,matches)
-                    known_containers[container]['memoryused'] = memmbused
-                    known_containers[container]['memorylimit'] = memmblimit
+                    if 'json' not in known_containers[container] or stat not in known_containers[container]['json']:
+                        known_containers[container]['json'] = stat
+                        #"61.13MiB / 2.86GiB"
+                        #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
+                        regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
+                        if DEBUG: print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
+                        matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
+                        if DEBUG: print("STATS after regex parse")
+                        memmbused,memmblimit = stat_to_value("MEMORY",container,matches)
+                        known_containers[container]['memoryused'] = memmbused
+                        known_containers[container]['memorylimit'] = memmblimit
 
-                    if DEBUG: print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
-                    matches = re.match(regex, stat['NetIO'], re.MULTILINE)
-                    netinput,netoutput = stat_to_value("NETIO",container,matches)
-                    known_containers[container]['netinput'] = netinput
-                    known_containers[container]['netoutput'] = netoutput
+                        if DEBUG: print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
+                        matches = re.match(regex, stat['NetIO'], re.MULTILINE)
+                        netinput,netoutput = stat_to_value("NETIO",container,matches)
+                        known_containers[container]['netinput'] = netinput
+                        known_containers[container]['netoutput'] = netoutput
 
-                    if DEBUG: print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
-                    matches = re.match(regex, stat['BlockIO'], re.MULTILINE)
-                    blockinput,blockoutput = stat_to_value("BLOCKIO",container,matches)
-                    known_containers[container]['blockinput'] = blockinput
-                    known_containers[container]['blockoutput'] = blockoutput
+                        if DEBUG: print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
+                        matches = re.match(regex, stat['BlockIO'], re.MULTILINE)
+                        blockinput,blockoutput = stat_to_value("BLOCKIO",container,matches)
+                        known_containers[container]['blockinput'] = blockinput
+                        known_containers[container]['blockoutput'] = blockoutput
 
-                    known_containers[container]['memory'] = stat['MemUsage']
-                    known_containers[container]['cpu'] = stat['CPUPerc']
-                    known_containers[container]['netio'] = stat['NetIO']
-                    print("STATS: printing container")
-                    print(known_containers[container])
-                    if MQTT_ATTRIBUTE == 0:
-                        print("EVENT: Sending mqtt payload")
-                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                        known_containers[container]['memory'] = stat['MemUsage']
+                        known_containers[container]['cpu'] = stat['CPUPerc']
+                        known_containers[container]['netio'] = stat['NetIO']
+                        print("STATS: printing container")
+                        print(known_containers[container])
+                        if MQTT_ATTRIBUTE == 0:
+                            print("EVENT: Sending mqtt payload")
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                        else:
+                            #MQTT topic per field - works for openhab better
+                            for entry in known_containers[container]:
+                                if DEBUG: print ("Processing container: " + container)
+                                #print (entry)
+                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
                     else:
-                        #MQTT topic per field - works for openhab better
-                        for entry in known_containers[container]:
-                            if DEBUG: print ("Processing container: " + container)
-                            #print (entry)
-                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                        if DEBUG: print ("STATS: Not processing record as duplicate record: %s " % linestats)
+                    #if stat not in known_containers[container]['json']:
+
                 except Exception as ex:
                     print("STATS: error parsing linestats: " + str(ex))
                     print("STATS: ERROR parsing linestats: " + linestats)
