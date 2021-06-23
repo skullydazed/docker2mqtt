@@ -14,7 +14,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
@@ -48,6 +48,7 @@ def mqtt_disconnect():
     """Called by atexit to make sure we send our last_will message.
     """
     mqtt.publish(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
+    mqtt.publish(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/version', __version__, qos=MQTT_QOS, retain=True)
     mqtt.disconnect()
     sleep(1)
     mqtt.loop_stop()
