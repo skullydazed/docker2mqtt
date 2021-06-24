@@ -15,7 +15,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.0.9"
+__version__ = "2.0.10"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
@@ -344,7 +344,7 @@ if __name__ == '__main__':
 
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
-                        regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMG]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMG]?i?B)"
+                        regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMGT]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMGT]?i?B)"
                         if DEBUG: print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
                         matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
                         if DEBUG: print("STATS after regex parse")
