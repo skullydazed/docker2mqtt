@@ -146,19 +146,22 @@ if __name__ == '__main__':
         docker_stats_t.start()
         if DEBUG: print("Starting stats started")
 
+    line = ""
+    linestats = ""
+
     # Loop and wait for new events
     while True:
         # Collect and process an event from `docker events`
         try:
-            if DEBUG: print("Looking for line events")
+            #if DEBUG: print("Looking for line events")
             line = docker_events.get(block=False)
             if DEBUG: print("Events length: %s" % docker_events.qsize() )
         except queue.Empty:
             # No data right now, just move along.
-            if DEBUG: print ("Line continue")
+            #if DEBUG: print ("Line continue")
             pass
         
-        if DEBUG: print("Looking for line stats")
+        #if DEBUG: print("Looking for line stats")
         try:
             linestats = docker_stats.get(block=False)
             if DEBUG: print(linestats)
