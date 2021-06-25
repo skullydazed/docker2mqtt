@@ -15,7 +15,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.0.10"
+__version__ = "2.1.0"
 
 DEBUG = environ.get('DEBUG', '1') == '1'
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
@@ -30,10 +30,10 @@ MQTT_TIMEOUT = int(environ.get('MQTT_TIMEOUT', '30'))
 MQTT_TOPIC_PREFIX = environ.get('MQTT_TOPIC_PREFIX', 'docker')
 MQTT_QOS = int(environ.get('MQTT_QOS', 1))
 MQTT_ATTRIBUTE = int(environ.get('MQTT_ATTRIBUTE',0))
-DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
 STATS = environ.get('STATS','1')
 EVENTS = environ.get('EVENTS','1')
+DOCKER_SWARM = environ.get("DOCKER_SWARM",0)
 
 known_containers = {}
 pending_destroy_operations = {}
@@ -57,41 +57,11 @@ def mqtt_disconnect():
 
 def mqtt_send(topic, payload, retain=False):
     try:
-        if DEBUG:
-            print(f'Sending to MQTT: {topic}: {payload}')
+        if DEBUG: print(f'Sending to MQTT: {topic}: {payload}')
         mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
 
     except Exception as e:
         print(f'MQTT Publish Failed: {e}')
-
-
-def register_container(container_entry):
-    """
-    """
-    known_containers[container_entry['name']] = container_entry
-    registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container_entry['name']))
-    registration_packet = {
-        'name': f"{MQTT_TOPIC_PREFIX.title()} {container_entry['name']}",
-        'unique_id': f'{MQTT_TOPIC_PREFIX}_{DOCKER2MQTT_HOSTNAME}_{registration_topic}',
-        'availability_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status',
-        'payload_available': 'online',
-        'payload_not_available': 'offline',
-        'state_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
-        'value_template': '{{ value_json.state }}',
-        'payload_on': 'on',
-        'payload_off': 'off',
-        'device_class': 'connectivity',
-        'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
-    }
-    mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
-    if MQTT_ATTRIBUTE == 0:
-        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
-    else:
-        #MQTT topic per field - works for openhab better
-        for entry in container_entry:
-            #print("================= entry")
-            #print(entry)
-            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}/{entry}',container_entry[entry],retain=True)
 
 
 def readline_thread():
@@ -123,7 +93,7 @@ def stat_to_value(stat,container,matches):
     limit = 0
 
     if (matches is None):
-        print("STATS %s: %s No matching regex, returning 0" % (stat,container))
+        if DEBUG: print("STATS %s: %s No matching regex, returning 0" % (stat,container))
         used = 0
         limit = 0
         return used,limit
@@ -141,7 +111,7 @@ def stat_to_value(stat,container,matches):
     if (usedsymbol == "kB"): used = used / 1024
     if (usedsymbol == "B"): used = used / 1024 / 1024
     if (usedsymbol == "B"): used = used / 1024 / 1024
-    print("STATS %s: %s Used %f Mb" % (stat,container,used))
+    if DEBUG: print("STATS %s: %s Used %f Mb" % (stat,container,used))
     limit = float(matches.group('limit'))
     if (limitsymbol == "GiB"): limit = limit * 1024
     if (limitsymbol == "KiB"): limit = limit /1024
@@ -150,7 +120,7 @@ def stat_to_value(stat,container,matches):
     if (limitsymbol == "kB"): limit = limit / 1024
     if (limitsymbol == "B"): limit = limit / 1024 /1024
     if DEBUG: print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
-    print("STATS %s: Stat for container %s is %f.1 MB from %f.1 MB" % (stat,container,used,limit))
+    if DEBUG: print("STATS %s: Stat for container %s is %f.1 MB from %f.1 MB" % (stat,container,used,limit))
     return used,limit
 
 if __name__ == '__main__':
@@ -163,37 +133,13 @@ if __name__ == '__main__':
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
 
     numcontainers = 0
-    # Register containers with HA
-    docker_ps = run(docker_ps_cmd, stdout=PIPE, text=True)
-    for line in docker_ps.stdout.splitlines():
-        numcontainers = numcontainers + 1
-        container_status = json.loads(line)
-        if DEBUG: print("Adding container: %s length: %s" % (container_status['Names'],numcontainers))
-
-        if 'Paused' in container_status['Status']:
-            status_str = 'paused'
-            state_str = 'off'
-        elif 'Up' in container_status['Status']:
-            status_str = 'running'
-            state_str = 'on'
-        else:
-            status_str = 'stopped'
-            state_str = 'off'
-        
-        register_container({
-            'name': container_status['Names'],
-            'image': container_status['Image'],
-            'status': status_str,
-            'state': state_str
-        })
-
     # Start the docker events thread
-    docker_events = queue.Queue(maxsize=numcontainers)
+    docker_events = queue.Queue(maxsize=numcontainers*2)
     if EVENTS == '1':
         docker_events_t = Thread(target=readline_thread, daemon=True)
         docker_events_t.start()
     
-    docker_stats = queue.Queue(maxsize=numcontainers)
+    docker_stats = queue.Queue(maxsize=numcontainers*2)
     if (STATS == '1'):
         if DEBUG: print("Starting stats thread")
         docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
@@ -205,7 +151,7 @@ if __name__ == '__main__':
         # Collect and process an event from `docker events`
         try:
             if DEBUG: print("Looking for line events")
-            line = docker_events.get(timeout=1)
+            line = docker_events.get(block=False)
             if DEBUG: print("Events length: %s" % docker_events.qsize() )
         except queue.Empty:
             # No data right now, just move along.
@@ -214,95 +160,50 @@ if __name__ == '__main__':
         
         if DEBUG: print("Looking for line stats")
         try:
-            linestats = docker_stats.get(timeout=1)
+            linestats = docker_stats.get(block=False)
             if DEBUG: print(linestats)
-            print("Stats length: %s" % docker_stats.qsize())
+            if DEBUG: print("Stats length: %s" % docker_stats.qsize())
         except queue.Empty:
             # No data right now, just move along.
-            continue
+            pass
 
         if docker_events.qsize() > 0:
             if DEBUG: print ("EVENT:Have an event to process")
             try:
                 if line:
                     event = json.loads(line)
-                    print(event)
+                    if DEBUG: print(event)
                     if event['status'] not in WATCHED_EVENTS:
                         print("EVENT: Not a watched event: %s" % event['status'])
                         continue
 
                     container = event['Actor']['Attributes']['name']
 
-                    if event['status'] == 'create':
-                        # Cancel any previous pending destroys and add this to known_containers.
-                        print(f'Container {container} has been created.')
-                        if container in pending_destroy_operations:
-                            print(f'Removing pending delete for {{container}}.')
-                            del(pending_destroy_operations[container])
+                    container_event = {}
+                    container_event['name'] = container
+                    container_event['host'] = f'{DOCKER2MQTT_HOSTNAME}'
+                    container_event['image'] = event['from'].split("@")[0]
+                    container_event['status'] = event['status']
 
-                        register_container({
-                            'name': container,
-                            'image': event['from'],
-                            'status': 'created',
-                            'state': 'off'
-                        })
-
-                    elif event['status'] == 'destroy':
-                        # Add this container to pending_destroy_operations.
-                        print(f'Container {container} has been destroyed.')
-                        pending_destroy_operations[container] = time()
-                        known_containers[container]['status'] = 'destroyed'
-                        known_containers[container]['state'] = 'off'
-
-                    elif event['status'] == 'die':
-                        print(f'Container {container} has stopped.')
-                        known_containers[container]['status'] = 'stopped'
-                        known_containers[container]['state'] = 'off'
-
-                    elif event['status'] == 'pause':
-                        print(f'Container {container} has paused.')
-                        known_containers[container]['status'] = 'paused'
-                        known_containers[container]['state'] = 'off'
-
-                    elif event['status'] == 'rename':
+                    if event['status'] == 'rename':
+                        # clear the old event topic out for a rename
                         old_name = event['Actor']['Attributes']['oldName']
                         if old_name.startswith('/'):
                             old_name = old_name[1:]
-                        print(f'Container {old_name} renamed to {container}.')
-                        mqtt_send(f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{old_name}/config', '', retain=True)
-                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
-                        register_container({
-                            'name': container,
-                            'image': known_containers[old_name]['image'],
-                            'status': known_containers[old_name]['status'],
-                            'state': known_containers[old_name]['state']
-                        })
-                        del(known_containers[old_name])
+                        if DEBUG: print(f'EVENT: Container {old_name} renamed to {container}.')
+                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event/{old_name}', None, retain=True)
+                    #if event['status'] == 'rename':
 
-                    elif event['status'] == 'start':
-                        print(f'Container {container} has started.')
-                        known_containers[container]['status'] = 'running'
-                        known_containers[container]['state'] = 'on'
-
-                    elif event['status'] == 'unpause':
-                        print(f'Container {container} has unpaused.')
-                        known_containers[container]['status'] = 'running'
-                        known_containers[container]['state'] = 'on'
-
-                    else:
-                        # Don't send an MQTT packet if nothing has changed
-                        continue
-                    #if event['status'] == 'create':
 
                     if MQTT_ATTRIBUTE == 0:
-                        print("EVENT: Sending mqtt payload")
-                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                        if DEBUG: print("EVENT: Sending mqtt payload")
+                        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event', json.dumps(container_event), retain=True)
                     else:
                         #MQTT topic per field - works for openhab better
-                        for entry in known_containers[container]:
-                            print ("Processing container: " + container)
+                        for entry in container_event:
+                            if DEBUG: print ("Processing container: " + container)
                             #print (entry)
-                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event/{container}/{entry}',container_event[entry],retain=True)
                     #if MQTT_ATTRIBUTE == 0:
                 #if event:
             except Exception as eventEx:
@@ -324,23 +225,31 @@ if __name__ == '__main__':
                     #print("STATS: loaded json")
                     #print(stat)
                     container = stat['Name']
+                    if DOCKER_SWARM:
+                        if DEBUG: print("STAT: Trying to obtain name from %s" % container)
+                        regex = r'^(?P<container>[a-zA-Z0-9-_]+)\.?.*?$'
+                        matches = re.match(regex,stat['Name'])
+                        container = matches.group('container')
+                        if DEBUG: print("STAT: New name for %s is %s" % (stat['Name'],container))
+
                     if DEBUG: print("STAT: GETTING STAT KEY")
                     statkey = hashlib.md5(json.dumps(stat).encode("utf-8")).hexdigest()
                     
-                    haskey = False
-                    if container in known_containers and 'key' in known_containers[container]:
-                        haskey = True 
+                    if container not in known_containers:
+                        known_containers[container] = {}
+                        known_containers[container]['name'] = container
+                        known_containers[container]['key'] = ""
 
                     if DEBUG: print("STAT: STATKEY: %s" % statkey)
-                    existingstatkey = ""
-                    if haskey == True: existingstatkey = known_containers[container]['key']
+                    existingstatkey = known_containers[container]['key']
                     if DEBUG: print("STAT: OLDSTAT: %s" % existingstatkey)
 
-
-                    if container not in known_containers or statkey != existingstatkey:
-                        print("STAT: Processing %s stats" % container)
+                    if statkey != existingstatkey:
+                        if DEBUG: print("STAT: Processing %s stats" % container)
+                        container_stats = {}
+                        container_stats['name'] = container
+                        container_stats['host'] = f'{DOCKER2MQTT_HOSTNAME}'
                         known_containers[container]['key'] = statkey
-                        known_containers[container]['host'] = f'{DOCKER2MQTT_HOSTNAME}'
 
                         #"61.13MiB / 2.86GiB"
                         #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
@@ -349,38 +258,37 @@ if __name__ == '__main__':
                         matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
                         if DEBUG: print("STATS after regex parse")
                         memmbused,memmblimit = stat_to_value("MEMORY",container,matches)
-                        known_containers[container]['memoryused'] = memmbused
-                        known_containers[container]['memorylimit'] = memmblimit
+                        container_stats['memoryused'] = memmbused
+                        container_stats['memorylimit'] = memmblimit
 
                         if DEBUG: print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
                         matches = re.match(regex, stat['NetIO'], re.MULTILINE)
                         netinput,netoutput = stat_to_value("NETIO",container,matches)
-                        known_containers[container]['netinput'] = netinput
-                        known_containers[container]['netoutput'] = netoutput
+                        container_stats['netinput'] = netinput
+                        container_stats['netoutput'] = netoutput
 
                         if DEBUG: print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
                         matches = re.match(regex, stat['BlockIO'], re.MULTILINE)
                         blockinput,blockoutput = stat_to_value("BLOCKIO",container,matches)
-                        known_containers[container]['blockinput'] = blockinput
-                        known_containers[container]['blockoutput'] = blockoutput
+                        container_stats['blockinput'] = blockinput
+                        container_stats['blockoutput'] = blockoutput
 
-                        known_containers[container]['memory'] = stat['MemUsage']
-                        known_containers[container]['cpu'] = float(stat['CPUPerc'].strip('%'))
-                        known_containers[container]['netio'] = stat['NetIO']
+                        container_stats['memory'] = stat['MemUsage']
+                        container_stats['cpu'] = float(stat['CPUPerc'].strip('%'))
+                        container_stats['netio'] = stat['NetIO']
                         if DEBUG: print("STATS: printing container")
-                        if DEBUG: print(known_containers[container])
+                        if DEBUG: print(container_stats)
                         if MQTT_ATTRIBUTE == 0:
-                            print("STATS: Sending mqtt payload")
-                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                            if DEBUG: print("STATS: Sending mqtt payload")
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/stats', json.dumps(container_stats), retain=False)
                         else:
                             #MQTT topic per field - works for openhab better
-                            for entry in known_containers[container]:
+                            for entry in container_stats:
                                 if DEBUG: print ("Processing container: %s entry: %s" % ( container,entry))
                                 #print (entry)
-                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}/{entry}',known_containers[container][entry],retain=True)
+                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/stats/{container}/{entry}',container_stats[entry],retain=False)
                     else:
-                        if DEBUG: print ("STATS: Not processing record as duplicate record: %s " % linestats)
-                        print("STATS Container Skipped duplicate record for %s " % container)
+                        if DEBUG: print ("STATS: Not processing record as duplicate record: %s " % container)
                     #if stat not in known_containers[container]['json']:
 
                 except Exception as ex:
@@ -390,10 +298,10 @@ if __name__ == '__main__':
                     
                     pass
             else:
-                print("empty")
+                if DEBUG: print("empty")
 
 
-            print ("STATS: %s" % linestats)
+            if DEBUG: print ("STATS: %s" % linestats)
         #if docker_stats.qsize() > 0:
     #while True:
 
