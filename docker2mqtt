@@ -155,7 +155,7 @@ if __name__ == '__main__':
         try:
             #if DEBUG: print("Looking for line events")
             line = docker_events.get(block=False)
-            if DEBUG: print("Events length: %s" % docker_events.qsize() )
+            #if DEBUG: print("Events length: %s" % docker_events.qsize() )
         except queue.Empty:
             # No data right now, just move along.
             #if DEBUG: print ("Line continue")
@@ -170,7 +170,7 @@ if __name__ == '__main__':
             # No data right now, just move along.
             pass
 
-        if docker_events.qsize() > 0:
+        if docker_events.qsize() > 0 and EVENTS == '1' :
             if DEBUG: print ("EVENT:Have an event to process")
             try:
                 if line:
@@ -181,7 +181,7 @@ if __name__ == '__main__':
                         continue
 
                     container = event['Actor']['Attributes']['name']
-
+                    if DEBUG: print("Container name: " + container)
                     container_event = {}
                     container_event['name'] = container
                     container_event['host'] = f'{DOCKER2MQTT_HOSTNAME}'
@@ -208,6 +208,8 @@ if __name__ == '__main__':
                             #print (entry)
                             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event/{container}/{entry}',container_event[entry],retain=True)
                     #if MQTT_ATTRIBUTE == 0:
+                else:
+                    if DEBUG: print ("EVENT: Empty line")
                 #if event:
             except Exception as eventEx:
                 print("EVENTS: error parsing line: " + str(eventEx))
@@ -217,7 +219,7 @@ if __name__ == '__main__':
 
         #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
         #{"BlockIO":"--","CPUPerc":"--","Container":"b5ad8ff32144","ID":"b5ad8ff32144","MemPerc":"--","MemUsage":"-- / --","Name":"cameraevents","NetIO":"--","PIDs":"--"}
-        if docker_stats.qsize() > 0:
+        if docker_stats.qsize() > 0 and STATS == '1':
             if DEBUG: print("STATS: loading line as JSON: " + linestats)
             if linestats:
                 linestats = ''.join([c for c in linestats if ord(c) > 31 or ord(c) == 9])
