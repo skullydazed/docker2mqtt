@@ -74,15 +74,18 @@ def readline_thread():
     """Run docker events and continually read lines from it.
     """
     try:
-        #with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
-        if bDebug: print("starting events thread")
-        proc = run(docker_events_cmd, stdout=PIPE, stderr=PIPE)
-        while True:
-            retcode =  proc.poll()
-            line = proc.stdout.readline()
-            docker_events.put(line)
-            if bDebug: print("EVENTS line:  %s " % line)
-            yield line
+        print("starting events thread")
+        #proc = run(docker_events_cmd, stdout=PIPE, stderr=PIPE)
+        #while True:
+        #    retcode =  proc.poll()
+        #    line = proc.stdout.readline()
+        #    if bDebug: print("EVENTS line:  %s " % line)
+        #    docker_events.put(line)
+        #    yield line
+        with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
+            while True:
+                docker_events.put(proc.stdout.readline())
+
                 
     except Exception as ex:
         print("Error Running Events thread: " + str(ex))
@@ -163,9 +166,10 @@ if __name__ == '__main__':
         docker_events = queue.Queue(maxsize=100)
         if bEvents:
             if bDebug: print("Starting EVENTS thread")
-            started = True
             docker_events_t = Thread(target=readline_thread, daemon=True)
             docker_events_t.start()
+            started = True
+
 
         docker_stats = queue.Queue(maxsize=100)
         if (bStats):
@@ -186,8 +190,6 @@ if __name__ == '__main__':
         while True:
             # Collect and process an event from `docker events`
             try:
-                #if bDebug: print("Looking for line events")
-                
                 if bEvents: line = docker_events.get(block=False)
                 if bDebug: print("Events length: %s" % docker_events.qsize() )
             except queue.Empty:
@@ -204,7 +206,7 @@ if __name__ == '__main__':
                 # No data right now, just move along.
                 pass
 
-            if docker_events.qsize() > 0 and bEvents:
+            if bEvents and docker_events.qsize() > 0:
                 try:
                     if line and len(line) > 0:
                         event = json.loads(line)
@@ -247,12 +249,11 @@ if __name__ == '__main__':
                 except Exception as eventEx:
                     print("EVENTS: error parsing line: " + str(eventEx))
                     print("EVENTS: ERROR parsing line: " + line)
-
             #if docker_events.qsize() > 0:
 
             #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
             #{"BlockIO":"--","CPUPerc":"--","Container":"b5ad8ff32144","ID":"b5ad8ff32144","MemPerc":"--","MemUsage":"-- / --","Name":"cameraevents","NetIO":"--","PIDs":"--"}
-            if docker_stats.qsize() > 0 and bStats:
+            if bStats and docker_stats.qsize() > 0:
                 #if bDebug: print("STATS: loading line as JSON: " + linestats)
                 if linestats:
                     linestats = ''.join([c for c in linestats if ord(c) > 31 or ord(c) == 9])
