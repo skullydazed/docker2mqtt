@@ -75,6 +75,14 @@ def readline_thread():
     """
     try:
         print("starting events thread")
+        process = Popen(docker_events_cmd,stdout=PIPE, text=True)
+        while True:
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                docker_events.put(output.strip())
+            rc = process.poll()
         #proc = run(docker_events_cmd, stdout=PIPE, stderr=PIPE)
         #while True:
         #    retcode =  proc.poll()
@@ -82,9 +90,9 @@ def readline_thread():
         #    if bDebug: print("EVENTS line:  %s " % line)
         #    docker_events.put(line)
         #    yield line
-        with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
-            while True:
-                docker_events.put(proc.stdout.readline())
+        #with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
+        #    while True:
+        #        docker_events.put(proc.stdout.readline())
 
                 
     except Exception as ex:
