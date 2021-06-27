@@ -17,7 +17,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.1.3"
+__version__ = "2.1.4"
 
 DEBUG = environ.get('DEBUG', '0') 
 DEBUGSTAT = environ.get('DEBUGSTAT', '0') 
@@ -305,7 +305,7 @@ if __name__ == '__main__':
                         existingstatkey = known_containers[container]['key']
                         if bDebugStat: print("STAT: OLDSTAT: %s" % existingstatkey)
 
-                        checkdate = datetime.datetime.now()-datetime.timedelta(seconds=STATSRECORDSECONDS)
+                        checkdate = datetime.datetime.now()-datetime.timedelta(seconds=int(STATSRECORDSECONDS))
                         containerdate = known_containers[container]['last']
                         if bDebugStat: print("STATS: dates %s %s" % (checkdate,containerdate))
 
