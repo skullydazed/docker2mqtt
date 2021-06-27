@@ -8,6 +8,7 @@ import queue
 import re
 import string
 import hashlib
+import datetime
 from os import environ
 from socket import gethostname
 from subprocess import run, Popen, PIPE
@@ -16,7 +17,7 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-__version__ = "2.1.2"
+__version__ = "2.1.3"
 
 DEBUG = environ.get('DEBUG', '0') 
 DEBUGSTAT = environ.get('DEBUGSTAT', '0') 
@@ -34,6 +35,7 @@ MQTT_QOS = int(environ.get('MQTT_QOS', 1))
 MQTT_ATTRIBUTE = int(environ.get('MQTT_ATTRIBUTE',0))
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
 STATS = environ.get('STATS','0')
+STATSRECORDSECONDS = environ.get('STATSRECORDSECONDS',30)
 EVENTS = environ.get('EVENTS','0')
 DOCKER_SWARM = 0
 bDebug = False
@@ -296,17 +298,24 @@ if __name__ == '__main__':
                             known_containers[container] = {}
                             known_containers[container]['name'] = container
                             known_containers[container]['key'] = ""
+                            known_containers[container]['last'] = datetime.datetime(2020,1,1)
+
 
                         if bDebugStat: print("STAT: STATKEY: %s" % statkey)
                         existingstatkey = known_containers[container]['key']
                         if bDebugStat: print("STAT: OLDSTAT: %s" % existingstatkey)
 
-                        if statkey != existingstatkey:
+                        checkdate = datetime.datetime.now()-datetime.timedelta(seconds=STATSRECORDSECONDS)
+                        containerdate = known_containers[container]['last']
+                        if bDebugStat: print("STATS: dates %s %s" % (checkdate,containerdate))
+
+                        if statkey != existingstatkey and containerdate <= checkdate:
                             if bDebugStat: print("STAT: Processing %s stats" % container)
                             container_stats = {}
                             container_stats['name'] = container
                             container_stats['host'] = f'{DOCKER2MQTT_HOSTNAME}'
                             known_containers[container]['key'] = statkey
+                            known_containers[container]['last'] = datetime.datetime.now()
 
                             #"61.13MiB / 2.86GiB"
                             #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
@@ -345,7 +354,7 @@ if __name__ == '__main__':
                                     #print (entry)
                                     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/stats/{container}/{entry}',container_stats[entry],retain=False)
                         else:
-                            if bDebugStat: print ("STATS: Not processing record as duplicate record: %s " % container)
+                            if bDebugStat: print ("STATS: Not processing record as duplicate record or too young: %s " % container)
                         #if stat not in known_containers[container]['json']:
 
                     except Exception as ex:
@@ -360,7 +369,7 @@ if __name__ == '__main__':
 
                 #if bDebug: print ("STATS: %s" % linestats)
             #if docker_stats.qsize() > 0:
-            sleep(0.01)
+            sleep(0.2)
         #while True:
     except Exception as ex:
         print("Error processing: " + str(ex))
