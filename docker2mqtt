@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Listens to `docker system events` and sents container stop/start events to mqtt.
 """
+import sys
 import atexit
 import json
 import queue
 import re
+import string
+import hashlib
+import datetime
 from os import environ
 from socket import gethostname
 from subprocess import run, Popen, PIPE
@@ -13,7 +17,10 @@ from time import sleep, time
 
 import paho.mqtt.client
 
-DEBUG = environ.get('DEBUG', '1') == '1'
+__version__ = "2.1.4"
+
+DEBUG = environ.get('DEBUG', '0') 
+DEBUGSTAT = environ.get('DEBUGSTAT', '0') 
 DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
 HOMEASSISTANT_PREFIX = environ.get('HOMEASSISTANT_PREFIX', 'homeassistant')
 DOCKER2MQTT_HOSTNAME = environ.get('DOCKER2MQTT_HOSTNAME', gethostname())
@@ -25,13 +32,23 @@ MQTT_PORT = int(environ.get('MQTT_PORT', '1883'))
 MQTT_TIMEOUT = int(environ.get('MQTT_TIMEOUT', '30'))
 MQTT_TOPIC_PREFIX = environ.get('MQTT_TOPIC_PREFIX', 'docker')
 MQTT_QOS = int(environ.get('MQTT_QOS', 1))
-DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
+MQTT_ATTRIBUTE = int(environ.get('MQTT_ATTRIBUTE',0))
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
+STATS = environ.get('STATS','0')
+STATSRECORDSECONDS = environ.get('STATSRECORDSECONDS',30)
+EVENTS = environ.get('EVENTS','0')
+DOCKER_SWARM = 0
+bDebug = False
+bDebugStat = False
+bStats = False
+bEvents = False
 
 known_containers = {}
 pending_destroy_operations = {}
 docker_events_cmd = ['docker', 'events', '-f', 'type=container', '--format', '{{json .}}']
 docker_ps_cmd = ['docker', 'ps', '-a', '--format', '{{json .}}']
+#docker_stats_cmd = ['docker','stats','--format','{\"container\":\"{{ .Name }}\",\"memory\":{\"raw\":\"{{ .MemUsage }}\",\"percent\":\"{{ .MemPerc }}\"},\"cpu\":\"{{ .CPUPerc }}\"}']
+docker_stats_cmd = ['docker','stats','--format','{{json .}}']
 invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
 
@@ -40,6 +57,7 @@ def mqtt_disconnect():
     """Called by atexit to make sure we send our last_will message.
     """
     mqtt.publish(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
+    mqtt.publish(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/version', __version__, qos=MQTT_QOS, retain=True)
     mqtt.disconnect()
     sleep(1)
     mqtt.loop_stop()
@@ -47,153 +65,313 @@ def mqtt_disconnect():
 
 def mqtt_send(topic, payload, retain=False):
     try:
-        if DEBUG:
-            print(f'Sending to MQTT: {topic}: {payload}')
+        if bDebugStat: print(f'Sending to MQTT: {topic}: {payload}')
         mqtt.publish(topic, payload=payload, qos=MQTT_QOS, retain=retain)
 
     except Exception as e:
         print(f'MQTT Publish Failed: {e}')
 
 
-def register_container(container_entry):
-    """
-    """
-    known_containers[container_entry['name']] = container_entry
-    registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container_entry['name']))
-    registration_packet = {
-        'name': f"{MQTT_TOPIC_PREFIX.title()} {container_entry['name']}",
-        'unique_id': f'{MQTT_TOPIC_PREFIX}_{DOCKER2MQTT_HOSTNAME}_{registration_topic}',
-        'availability_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status',
-        'payload_available': 'online',
-        'payload_not_available': 'offline',
-        'state_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
-        'value_template': '{{ value_json.state }}',
-        'payload_on': 'on',
-        'payload_off': 'off',
-        'device_class': 'connectivity',
-        'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
-    }
-    mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
-    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
-
-
 def readline_thread():
     """Run docker events and continually read lines from it.
     """
-    with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
+    try:
+        print("starting events thread")
+        process = Popen(docker_events_cmd,stdout=PIPE, text=True)
         while True:
-            docker_events.put(proc.stdout.readline())
+            output = process.stdout.readline()
+            if output == '' and process.poll() is not None:
+                break
+            if output:
+                docker_events.put(output.strip())
+            rc = process.poll()
+        #proc = run(docker_events_cmd, stdout=PIPE, stderr=PIPE)
+        #while True:
+        #    retcode =  proc.poll()
+        #    line = proc.stdout.readline()
+        #    if bDebug: print("EVENTS line:  %s " % line)
+        #    docker_events.put(line)
+        #    yield line
+        #with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
+        #    while True:
+        #        docker_events.put(proc.stdout.readline())
 
+                
+    except Exception as ex:
+        print("Error Running Events thread: " + str(ex))
+        sys.exit(0)
+
+def readline_stats_thread():
+    """Run docker events and continually read lines from it.
+    """
+    try:
+        if bDebugStat: print("STATS: STARTING STATS THREAD")
+        if bDebugStat: print(docker_stats_cmd)
+        with Popen(docker_stats_cmd, stdout=PIPE, text=True) as proc2:
+            while True:
+                docker_stats.put(proc2.stdout.readline().strip())
+    except Exception as ex:
+        print("Error Running stats thread: " + str(ex))
+        sys.exit(0)
+
+def stat_to_value(stat,container,matches):
+    """Converts a regex matches to two values, ie used and limit for memory
+    """
+    usedsymbol = ""
+    limitsymbol = ""
+    used = 0
+    limit = 0
+
+    if (matches is None):
+        if bDebugStat: print("STATS %s: %s No matching regex, returning 0" % (stat,container))
+        used = 0
+        limit = 0
+        return used,limit
+
+    if bDebugStat: print("STATS %s: %s Found matching regex, getting used symbol" % (stat,container))
+    usedsymbol = matches.group('usedsymbol')
+    if bDebugStat: print("STATS %s: %s Used Symbol %s" % (stat,container,usedsymbol))
+    limitsymbol = matches.group('limitsymbol')
+    if bDebugStat: print("STATS %s: %s Limit Symbol %s" % (stat,container,limitsymbol))
+    used = float(matches.group('used'))
+    if (usedsymbol == "GiB"): used = used * 1024
+    if (usedsymbol == "KiB"): used = used / 1024
+    if (usedsymbol == "TB"): used = used * 1024 * 1024
+    if (usedsymbol == "GB"): used = used * 1024
+    if (usedsymbol == "kB"): used = used / 1024
+    if (usedsymbol == "B"): used = used / 1024 / 1024
+    if (usedsymbol == "B"): used = used / 1024 / 1024
+    if bDebugStat: print("STATS %s: %s Used %f Mb" % (stat,container,used))
+    limit = float(matches.group('limit'))
+    if (limitsymbol == "GiB"): limit = limit * 1024
+    if (limitsymbol == "KiB"): limit = limit /1024
+    if (limitsymbol == "GB"): limit = limit * 1024
+    if (limitsymbol == "TB"): limit = limit * 1024 * 1024
+    if (limitsymbol == "kB"): limit = limit / 1024
+    if (limitsymbol == "B"): limit = limit / 1024 /1024
+    if bDebugStat: print("STATS %s: %s Limit %f Mb" % (stat,container,limit))
+    if bDebugStat: print("STATS %s: Stat for container %s is %f.1 MB from %f.1 MB" % (stat,container,used,limit))
+    return used,limit
 
 if __name__ == '__main__':
-    # Setup MQTT
-    mqtt = paho.mqtt.client.Client()
-    mqtt.username_pw_set(username=MQTT_USER,password=MQTT_PASSWD)
-    mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
-    mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
-    mqtt.loop_start()
-    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
+    try:
+        print("Debug: %s" % DEBUG)
+        print("STATS: %s" % STATS)
+        print("EVENTS: %s" % EVENTS)
+        if (DEBUG == '1'): bDebug = True
+        if (EVENTS == '1'): bEvents = True
+        if (STATS == '1'): bStats = True
+        if (DEBUGSTAT == '1'): bDebugStat = True
 
-    # Register containers with HA
-    docker_ps = run(docker_ps_cmd, stdout=PIPE, text=True)
-    for line in docker_ps.stdout.splitlines():
-        container_status = json.loads(line)
+        # Setup MQTT
+        mqtt = paho.mqtt.client.Client()
+        mqtt.username_pw_set(username=MQTT_USER,password=MQTT_PASSWD)
+        mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
+        mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
+        mqtt.loop_start()
+        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
 
-        if 'Paused' in container_status['Status']:
-            status_str = 'paused'
-            state_str = 'off'
-        elif 'Up' in container_status['Status']:
-            status_str = 'running'
-            state_str = 'on'
-        else:
-            status_str = 'stopped'
-            state_str = 'off'
-        
-        register_container({
-            'name': container_status['Names'],
-            'image': container_status['Image'],
-            'status': status_str,
-            'state': state_str
-        })
+        numcontainers = 0
+        started = False
+        # Start the docker events thread
+        docker_events = queue.Queue(maxsize=100)
+        if bEvents:
+            print("Starting EVENTS thread")
+            docker_events_t = Thread(target=readline_thread, daemon=True)
+            docker_events_t.start()
+            started = True
 
-    # Start the docker events thread
-    docker_events = queue.Queue()
-    docker_events_t = Thread(target=readline_thread, daemon=True)
-    docker_events_t.start()
 
-    # Loop and wait for new events
-    while True:
-        # Collect and process an event from `docker events`
-        try:
-            line = docker_events.get(timeout=1)
-        except queue.Empty:
-            # No data right now, just move along.
-            continue
- 
-        event = json.loads(line)
-        if event['status'] not in WATCHED_EVENTS:
-            continue
+        docker_stats = queue.Queue(maxsize=100)
+        if (bStats):
+            started = True
+            print("Starting STATS thread")
+            docker_stats_t = Thread(target=readline_stats_thread, daemon=True)
+            docker_stats_t.start()
+            if bDebugStat: print("Starting stats started")
 
-        container = event['Actor']['Attributes']['name']
+        if started == False:
+            print("Nothing started")
+            sys.exit(0)
 
-        if event['status'] == 'create':
-            # Cancel any previous pending destroys and add this to known_containers.
-            print(f'Container {container} has been created.')
-            if container in pending_destroy_operations:
-                print(f'Removing pending delete for {{container}}.')
-                del(pending_destroy_operations[container])
+        line = ""
+        linestats = ""
 
-            register_container({
-                'name': container,
-                'image': event['from'],
-                'status': 'created',
-                'state': 'off'
-            })
+        # Loop and wait for new events
+        while True:
+            # Collect and process an event from `docker events`
+            try:
+                if bEvents: line = docker_events.get(block=False)
+                if bDebug: print("Events length: %s" % docker_events.qsize() )
+                if bEvents and not docker_events_t.is_alive:
+                    print("Starting EVENTS thread")
+                    docker_events_t.start()
+            except queue.Empty:
+                # No data right now, just move along.
+                #if bDebug: print ("Line continue")
+                pass
+            
+            #if bDebug: print("Looking for line stats")
+            try:
+                if bStats: linestats = docker_stats.get(block=False)
+                #if bDebug: print(linestats)
+                if bDebugStat: print("Stats length: %s" % docker_stats.qsize())
+                if bStats and not docker_stats_t.is_alive:
+                    print("Starting STATS thread")
+                    docker_stats_t.start()
+            except queue.Empty:
+                # No data right now, just move along.
+                pass
 
-        elif event['status'] == 'destroy':
-            # Add this container to pending_destroy_operations.
-            print(f'Container {container} has been destroyed.')
-            pending_destroy_operations[container] = time()
-            known_containers[container]['status'] = 'destroyed'
-            known_containers[container]['state'] = 'off'
+            if bEvents and docker_events.qsize() > 0:
+                try:
+                    if line and len(line) > 0:
+                        event = json.loads(line)
+                        #if bDebug: print(event)
+                        if event['status'] not in WATCHED_EVENTS:
+                            print("EVENT: Not a watched event: %s" % event['status'])
+                            continue
 
-        elif event['status'] == 'die':
-            print(f'Container {container} has stopped.')
-            known_containers[container]['status'] = 'stopped'
-            known_containers[container]['state'] = 'off'
+                        container = event['Actor']['Attributes']['name']
+                        if bDebug: print ("EVENT:Have an event to process for Container name: " + container)
+                        container_event = {}
+                        container_event['name'] = container
+                        container_event['host'] = f'{DOCKER2MQTT_HOSTNAME}'
+                        container_event['image'] = event['from'].split("@")[0]
+                        container_event['status'] = event['status']
 
-        elif event['status'] == 'pause':
-            print(f'Container {container} has paused.')
-            known_containers[container]['status'] = 'paused'
-            known_containers[container]['state'] = 'off'
+                        if event['status'] == 'rename':
+                            # clear the old event topic out for a rename
+                            old_name = event['Actor']['Attributes']['oldName']
+                            if old_name.startswith('/'):
+                                old_name = old_name[1:]
+                            if bDebug: print(f'EVENT: Container {old_name} renamed to {container}.')
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event/{old_name}', None, retain=True)
+                        #if event['status'] == 'rename':
 
-        elif event['status'] == 'rename':
-            old_name = event['Actor']['Attributes']['oldName']
-            if old_name.startswith('/'):
-                old_name = old_name[1:]
-            print(f'Container {old_name} renamed to {container}.')
-            mqtt_send(f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{old_name}/config', '', retain=True)
-            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
-            register_container({
-                'name': container,
-                'image': known_containers[old_name]['image'],
-                'status': known_containers[old_name]['status'],
-                'state': known_containers[old_name]['state']
-            })
-            del(known_containers[old_name])
 
-        elif event['status'] == 'start':
-            print(f'Container {container} has started.')
-            known_containers[container]['status'] = 'running'
-            known_containers[container]['state'] = 'on'
+                        if MQTT_ATTRIBUTE == 0:
+                            if bDebug: print("EVENT: Sending mqtt payload")
+                            mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event', json.dumps(container_event), retain=True)
+                        else:
+                            #MQTT topic per field - works for openhab better
+                            for entry in container_event:
+                                if bDebug: print ("Processing container: " + container)
+                                #print (entry)
+                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/event/{container}/{entry}',container_event[entry],retain=True)
+                        #if MQTT_ATTRIBUTE == 0:
+                    #else:
+                    #    if bDebug: print ("EVENT: Empty line")
+                    #if event:
+                except Exception as eventEx:
+                    print("EVENTS: error parsing line: " + str(eventEx))
+                    print("EVENTS: ERROR parsing line: " + line)
+            #if docker_events.qsize() > 0:
 
-        elif event['status'] == 'unpause':
-            print(f'Container {container} has unpaused.')
-            known_containers[container]['status'] = 'running'
-            known_containers[container]['state'] = 'on'
+            #{"BlockIO":"408MB / 0B","CPUPerc":"0.03%","Container":"9460abca90f1","ID":"9460abca90f1","MemPerc":"22.84%","MemUsage":"9.137MiB / 40MiB","Name":"d2mqtt","NetIO":"882kB / 1.19MB","PIDs":"11"}
+            #{"BlockIO":"--","CPUPerc":"--","Container":"b5ad8ff32144","ID":"b5ad8ff32144","MemPerc":"--","MemUsage":"-- / --","Name":"cameraevents","NetIO":"--","PIDs":"--"}
+            if bStats and docker_stats.qsize() > 0:
+                #if bDebug: print("STATS: loading line as JSON: " + linestats)
+                if linestats:
+                    linestats = ''.join([c for c in linestats if ord(c) > 31 or ord(c) == 9])
+                    linestats = linestats.lstrip('[2J[H')
+                    #print(':'.join(hex(ord(x))[2:] for x in linestats))
+                    try:
+                        if bDebugStat: print("Stats length: %s" % docker_stats.qsize())
+                        stat = json.loads(linestats)
+                        #print("STATS: loaded json")
+                        #print(stat)
+                        container = stat['Name']
+                        #if bDebug: print ("STATS:  Have an Stat to process for Container name: " + container)
 
-        else:
-            # Don't send an MQTT packet if nothing has changed
-            continue
+                        #if DOCKER_SWARM == 1:
+                        #    if bDebug: print("STAT: Trying to obtain name from %s" % container)
+                        #    regex = r'^(?P<container>[a-zA-Z0-9-_]+)\.?.*?$'
+                        #    matches = re.match(regex,stat['Name'])
+                        #    container = matches.group('container')
+                        #    if bDebug: print("STAT: New name for %s is %s" % (stat['Name'],container))
 
-        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+                        if bDebugStat: print("STAT: GETTING STAT KEY")
+                        statkey = hashlib.md5(json.dumps(stat).encode("utf-8")).hexdigest()
+                        
+                        if container not in known_containers:
+                            known_containers[container] = {}
+                            known_containers[container]['name'] = container
+                            known_containers[container]['key'] = ""
+                            known_containers[container]['last'] = datetime.datetime(2020,1,1)
+
+
+                        if bDebugStat: print("STAT: STATKEY: %s" % statkey)
+                        existingstatkey = known_containers[container]['key']
+                        if bDebugStat: print("STAT: OLDSTAT: %s" % existingstatkey)
+
+                        checkdate = datetime.datetime.now()-datetime.timedelta(seconds=int(STATSRECORDSECONDS))
+                        containerdate = known_containers[container]['last']
+                        if bDebugStat: print("STATS: dates %s %s" % (checkdate,containerdate))
+
+                        if statkey != existingstatkey and containerdate <= checkdate:
+                            if bDebugStat: print("STAT: Processing %s stats" % container)
+                            container_stats = {}
+                            container_stats['name'] = container
+                            container_stats['host'] = f'{DOCKER2MQTT_HOSTNAME}'
+                            known_containers[container]['key'] = statkey
+                            known_containers[container]['last'] = datetime.datetime.now()
+
+                            #"61.13MiB / 2.86GiB"
+                            #regex = r"(?P<used>\d+?\.?\d+?)(?P<usedsymbol>[MG]iB)\s+\/\s(?P<limit>\d+?\.?\d+?)(?P<limitsymbol>[MG]iB)"
+                            regex = r"(?P<used>.+?)(?P<usedsymbol>[kKMGT]?i?B)\s+\/\s(?P<limit>.+?)(?P<limitsymbol>[kKMGT]?i?B)"
+                            if bDebugStat: print("STATS: Getting Memory from \"%s\" with \"%s\"" % (stat['MemUsage'], regex))
+                            matches = re.match(regex, stat['MemUsage'], re.MULTILINE)
+                            if bDebugStat: print("STATS after regex parse")
+                            memmbused,memmblimit = stat_to_value("MEMORY",container,matches)
+                            container_stats['memoryused'] = memmbused
+                            container_stats['memorylimit'] = memmblimit
+
+                            if bDebugStat: print("STATS: Getting NETIO from \"%s\" with \"%s\"" % (stat['NetIO'], regex))
+                            matches = re.match(regex, stat['NetIO'], re.MULTILINE)
+                            netinput,netoutput = stat_to_value("NETIO",container,matches)
+                            container_stats['netinput'] = netinput
+                            container_stats['netoutput'] = netoutput
+
+                            if bDebugStat: print("STATS: Getting BLOCKIO from \"%s\" with \"%s\"" % (stat['BlockIO'], regex))
+                            matches = re.match(regex, stat['BlockIO'], re.MULTILINE)
+                            blockinput,blockoutput = stat_to_value("BLOCKIO",container,matches)
+                            container_stats['blockinput'] = blockinput
+                            container_stats['blockoutput'] = blockoutput
+
+                            container_stats['memory'] = stat['MemUsage']
+                            container_stats['cpu'] = float(stat['CPUPerc'].strip('%'))
+                            container_stats['netio'] = stat['NetIO']
+                            if bDebugStat: print("STATS: printing container")
+                            if bDebugStat: print(container_stats)
+                            if MQTT_ATTRIBUTE == 0:
+                                if bDebugStat: print("STATS: Sending mqtt payload")
+                                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/stats', json.dumps(container_stats), retain=False)
+                            else:
+                                #MQTT topic per field - works for openhab better
+                                for entry in container_stats:
+                                    if bDebugStat: print ("Processing container: %s entry: %s" % ( container,entry))
+                                    #print (entry)
+                                    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/stats/{container}/{entry}',container_stats[entry],retain=False)
+                        else:
+                            if bDebugStat: print ("STATS: Not processing record as duplicate record or too young: %s " % container)
+                        #if stat not in known_containers[container]['json']:
+
+                    except Exception as ex:
+                        print("STATS: error parsing linestats: " + str(ex))
+                        print("STATS: ERROR parsing linestats: " + linestats)
+                        print(':'.join(hex(ord(x))[2:] for x in linestats))
+                        
+                        pass
+                #else:
+                #    if bDebug: print("empty")
+
+
+                #if bDebug: print ("STATS: %s" % linestats)
+            #if docker_stats.qsize() > 0:
+            sleep(0.2)
+        #while True:
+    except Exception as ex:
+        print("Error processing: " + str(ex))
+
+
