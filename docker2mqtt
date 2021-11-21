@@ -123,6 +123,15 @@ if __name__ == '__main__':
 
     # Loop and wait for new events
     while True:
+        # Remove any destroyed containers that have passed the TTL
+        for container, destroyed_at in pending_destroy_operations.copy().items():
+            if time() - destroyed_at > DESTROYED_CONTAINER_TTL:
+                print(f'Removing container {container} from MQTT.')
+                registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container))
+                mqtt_send(registration_topic, '', retain=True)
+                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', '', retain=True)
+                del(pending_destroy_operations[container])
+
         # Collect and process an event from `docker events`
         try:
             line = docker_events.get(timeout=1)
