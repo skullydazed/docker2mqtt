@@ -14,5 +14,8 @@ RUN apt update && \
 # Copy files into place
 COPY docker2mqtt /
 
+# Pass correct stop signal to script
+STOPSIGNAL SIGINT
+
 # Set the entrypoint
 ENTRYPOINT ["/docker2mqtt"]
