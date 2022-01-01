@@ -70,8 +70,9 @@ def register_container(container_entry):
         'value_template': '{{ value_json.state }}',
         'payload_on': 'on',
         'payload_off': 'off',
-        'device_class': 'connectivity',
+        'device_class': 'running',
         'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
+        'qos': MQTT_QOS,
     }
     mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
@@ -87,7 +88,9 @@ def readline_thread():
 
 if __name__ == '__main__':
     # Setup MQTT
-    mqtt = paho.mqtt.client.Client()
+    mqtt = paho.mqtt.client.Client(
+        client_id=MQTT_CLIENT_ID
+    )
     mqtt.username_pw_set(username=MQTT_USER,password=MQTT_PASSWD)
     mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
     mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
