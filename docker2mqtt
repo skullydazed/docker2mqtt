@@ -70,7 +70,7 @@ def register_container(container_entry):
         'value_template': '{{ value_json.state }}',
         'payload_on': 'on',
         'payload_off': 'off',
-        'device_class': 'connectivity',
+        'device_class': 'running',
         'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
     }
     mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
