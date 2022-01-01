@@ -72,6 +72,7 @@ def register_container(container_entry):
         'payload_off': 'off',
         'device_class': 'running',
         'json_attributes_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
+        'qos': MQTT_QOS,
     }
     mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
