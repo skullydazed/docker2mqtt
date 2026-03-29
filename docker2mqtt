@@ -137,7 +137,10 @@ def readline_thread():
     """
     with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
         while True:
-            docker_events.put(proc.stdout.readline())
+            line = proc.stdout.readline()
+            if not line:
+                break
+            docker_events.put(line)
 
 
 if __name__ == '__main__':
