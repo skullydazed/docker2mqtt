@@ -152,6 +152,9 @@ if __name__ == '__main__':
     # Register containers with HA
     docker_ps = run(docker_ps_cmd, stdout=PIPE, text=True)
     for line in docker_ps.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
         container_status = json.loads(line)
 
         labels = parse_labels(container_status.get('Labels', ''))
@@ -198,7 +201,16 @@ if __name__ == '__main__':
             # No data right now, just move along.
             continue
 
-        event = json.loads(line)
+        line = line.strip()
+        if not line:
+            continue
+
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            print(f'Failed to parse docker event: {line!r}')
+            continue
+
         if event['status'] not in WATCHED_EVENTS:
             continue
 
