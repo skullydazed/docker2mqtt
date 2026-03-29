@@ -1,2 +1,3 @@
 DOCKER_RUN
 .note
+__pycache__
