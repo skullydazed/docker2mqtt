@@ -148,7 +148,11 @@ if __name__ == '__main__':
     mqtt = paho.mqtt.client.Client(client_id=MQTT_CLIENT_ID)
     mqtt.username_pw_set(username=MQTT_USER, password=MQTT_PASSWD)
     mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
-    mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
+    try:
+        mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
+    except Exception as e:
+        print(f'Failed to connect to MQTT broker {MQTT_HOST}:{MQTT_PORT}: {e}')
+        exit(1)
     mqtt.loop_start()
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'online', retain=True)
 
