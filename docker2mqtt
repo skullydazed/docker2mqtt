@@ -165,25 +165,16 @@ if __name__ == '__main__':
             # Add this container to pending_destroy_operations.
             print(f'Container {container} has been destroyed.')
             pending_destroy_operations[container] = time()
-            if container not in known_containers:
-                print(f'Container {container} is not in known_containers; skipping state update.')
-                continue
             known_containers[container]['status'] = 'destroyed'
             known_containers[container]['state'] = 'off'
 
         elif event['status'] == 'die':
             print(f'Container {container} has stopped.')
-            if container not in known_containers:
-                print(f'Container {container} is not in known_containers; skipping state update.')
-                continue
             known_containers[container]['status'] = 'stopped'
             known_containers[container]['state'] = 'off'
 
         elif event['status'] == 'pause':
             print(f'Container {container} has paused.')
-            if container not in known_containers:
-                print(f'Container {container} is not in known_containers; skipping state update.')
-                continue
             known_containers[container]['status'] = 'paused'
             known_containers[container]['state'] = 'off'
 
@@ -194,9 +185,6 @@ if __name__ == '__main__':
             print(f'Container {old_name} renamed to {container}.')
             mqtt_send(DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', old_name)), '', retain=True)
             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
-            if old_name not in known_containers:
-                print(f'Container {old_name} is not in known_containers; skipping re-registration.')
-                continue
             register_container({
                 'name': container,
                 'image': known_containers[old_name]['image'],
@@ -207,25 +195,16 @@ if __name__ == '__main__':
 
         elif event['status'] == 'start':
             print(f'Container {container} has started.')
-            if container not in known_containers:
-                print(f'Container {container} is not in known_containers; skipping state update.')
-                continue
             known_containers[container]['status'] = 'running'
             known_containers[container]['state'] = 'on'
 
         elif event['status'] == 'stop':
             print(f'Container {container} is stopping.')
-            if container not in known_containers:
-                print(f'Container {container} is not in known_containers; skipping state update.')
-                continue
             known_containers[container]['status'] = 'stopped'
             known_containers[container]['state'] = 'off'
 
         elif event['status'] == 'unpause':
             print(f'Container {container} has unpaused.')
-            if container not in known_containers:
-                print(f'Container {container} is not in known_containers; skipping state update.')
-                continue
             known_containers[container]['status'] = 'running'
             known_containers[container]['state'] = 'on'
 
