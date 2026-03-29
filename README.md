@@ -43,6 +43,8 @@ You can use environment variables to control the behavior.
 | `DEBUG` | `0` | Set to `1` to enable additional debug logging. |
 | `DESTROYED_CONTAINER_TTL` | 86400 | How long, in seconds, before destroyed containers are removed from Home Assistant. Containers won't be removed if the service is restarted before the TTL expires. |
 | `DOCKER2MQTT_HOSTNAME` | Container Hostname | The hostname of your docker host. This will be the container's hostname by default, you probably want to override it. |
+| `DOCKER2MQTT_ALLOWLIST` | `` | Comma-separated list of container labels (or `label=value` pairs). When set, **only** containers that carry at least one of these labels are monitored. Leave unset (or empty) to monitor all containers. |
+| `DOCKER2MQTT_DENYLIST` | `` | Comma-separated list of container labels (or `label=value` pairs). Containers that carry any of these labels are **never** monitored, even if they also match the allowlist. Leave unset (or empty) to deny nothing. |
 | `HOMEASSISTANT_PREFIX` | `homeassistant` | The prefix for Home Assistant discovery. Must be the same as `discovery_prefix` in your Home Assistant configuration. |
 | `MQTT_CLIENT_ID` | `docker2mqtt` | The client id to send to the MQTT broker. |
 | `MQTT_HOST` | `localhost` | The MQTT broker to connect to. |
@@ -52,6 +54,31 @@ You can use environment variables to control the behavior.
 | `MQTT_TIMEOUT` | `30` | The timeout for the MQTT connection. |
 | `MQTT_TOPIC_PREFIX` | `docker` | The MQTT topic prefix. With the default data will be published to `docker/<hostname>`. |
 | `MQTT_QOS` | `1` | The MQTT QOS level |
+
+## Filtering Containers with Allow/Deny Lists
+
+You can control which containers are monitored by setting `DOCKER2MQTT_ALLOWLIST` and/or `DOCKER2MQTT_DENYLIST`. Each variable accepts a comma-separated list of container label keys or `key=value` pairs.
+
+**Denylist takes precedence:** a container that matches a denylist entry is always ignored, even if it also matches the allowlist.
+
+| Scenario | Allowlist | Denylist | Result |
+|----------|-----------|----------|--------|
+| Monitor all containers (default) | *(unset)* | *(unset)* | All containers monitored |
+| Only monitor labelled containers | `my.label` | *(unset)* | Only containers with label `my.label` |
+| Ignore CI/CD containers | *(unset)* | `gitea.forgejo.runner` | All containers except those with label `gitea.forgejo.runner` |
+| Ignore specific value | *(unset)* | `environment=ci` | All containers except those with `environment=ci` |
+
+**Example – ignore Gitea runner containers:**
+```yaml
+environment:
+  - DOCKER2MQTT_DENYLIST=gitea.forgejo.runner
+```
+
+**Example – only monitor production containers:**
+```yaml
+environment:
+  - DOCKER2MQTT_ALLOWLIST=environment=production
+```
 
 # Consuming The Data
 
