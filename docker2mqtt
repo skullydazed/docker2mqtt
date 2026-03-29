@@ -25,6 +25,8 @@ MQTT_PORT = int(environ.get('MQTT_PORT', '1883'))
 MQTT_TIMEOUT = int(environ.get('MQTT_TIMEOUT', '30'))
 MQTT_TOPIC_PREFIX = environ.get('MQTT_TOPIC_PREFIX', 'docker')
 MQTT_QOS = int(environ.get('MQTT_QOS', 1))
+DOCKER2MQTT_ALLOWLIST = [label.strip() for label in environ.get('DOCKER2MQTT_ALLOWLIST', '').split(',') if label.strip()]
+DOCKER2MQTT_DENYLIST = [label.strip() for label in environ.get('DOCKER2MQTT_DENYLIST', '').split(',') if label.strip()]
 DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
 
@@ -80,6 +82,56 @@ def register_container(container_entry):
     mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
 
 
+def parse_labels(labels_str):
+    """Parse a docker-formatted comma-separated label string into a dict."""
+    labels = {}
+    if labels_str:
+        for item in labels_str.split(','):
+            item = item.strip()
+            if '=' in item:
+                key, value = item.split('=', 1)
+                labels[key.strip()] = value.strip()
+            elif item:
+                labels[item] = ''
+    return labels
+
+
+def _label_matches(labels, filter_entry):
+    """Return True if *labels* dict satisfies a single filter entry.
+
+    *filter_entry* may be either a bare label key (matches any value) or a
+    ``key=value`` pair (matches only that exact value).
+    """
+    if '=' in filter_entry:
+        key, value = filter_entry.split('=', 1)
+        return labels.get(key) == value
+    return filter_entry in labels
+
+
+def container_is_allowed(labels):
+    """Return True if a container with the given labels should be monitored.
+
+    Denylist is checked first: any matching entry causes the container to be
+    rejected regardless of the allowlist.  If an allowlist is configured the
+    container must match at least one entry to be accepted.
+    """
+    for deny_label in DOCKER2MQTT_DENYLIST:
+        if _label_matches(labels, deny_label):
+            if DEBUG:
+                print(f'Container denied: matches denylist entry "{deny_label}".')
+            return False
+
+    if DOCKER2MQTT_ALLOWLIST:
+        for allow_label in DOCKER2MQTT_ALLOWLIST:
+            if _label_matches(labels, allow_label):
+                return True
+        if DEBUG:
+            print('Container skipped: does not match any allowlist entry.')
+        return False
+
+    return True
+
+
 def readline_thread():
     """Run docker events and continually read lines from it.
     """
@@ -101,6 +153,10 @@ if __name__ == '__main__':
     docker_ps = run(docker_ps_cmd, stdout=PIPE, text=True)
     for line in docker_ps.stdout.splitlines():
         container_status = json.loads(line)
+
+        labels = parse_labels(container_status.get('Labels', ''))
+        if not container_is_allowed(labels):
+            continue
 
         if 'Paused' in container_status['Status']:
             status_str = 'paused'
@@ -155,6 +211,10 @@ if __name__ == '__main__':
                 print(f'Removing pending destroy for {container} from pending_destroy_operations.')
                 del pending_destroy_operations[container]
 
+            labels = event['Actor']['Attributes']
+            if not container_is_allowed(labels):
+                continue
+
             register_container({
                 'name': container,
                 'image': event['from'],
@@ -165,17 +225,23 @@ if __name__ == '__main__':
         elif event['status'] == 'destroy':
             # Add this container to pending_destroy_operations.
             print(f'Container {container} has been destroyed.')
+            if container not in known_containers:
+                continue
             pending_destroy_operations[container] = time()
             known_containers[container]['status'] = 'destroyed'
             known_containers[container]['state'] = 'off'
 
         elif event['status'] == 'die':
             print(f'Container {container} has stopped.')
+            if container not in known_containers:
+                continue
             known_containers[container]['status'] = 'stopped'
             known_containers[container]['state'] = 'off'
 
         elif event['status'] == 'pause':
             print(f'Container {container} has paused.')
+            if container not in known_containers:
+                continue
             known_containers[container]['status'] = 'paused'
             known_containers[container]['state'] = 'off'
 
@@ -184,6 +250,8 @@ if __name__ == '__main__':
             if old_name.startswith('/'):
                 old_name = old_name[1:]
             print(f'Container {old_name} renamed to {container}.')
+            if old_name not in known_containers:
+                continue
             mqtt_send(DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', old_name)), '', retain=True)
             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
             register_container({
@@ -196,16 +264,22 @@ if __name__ == '__main__':
 
         elif event['status'] == 'start':
             print(f'Container {container} has started.')
+            if container not in known_containers:
+                continue
             known_containers[container]['status'] = 'running'
             known_containers[container]['state'] = 'on'
 
         elif event['status'] == 'stop':
             print(f'Container {container} is stopping.')
+            if container not in known_containers:
+                continue
             known_containers[container]['status'] = 'stopped'
             known_containers[container]['state'] = 'off'
 
         elif event['status'] == 'unpause':
             print(f'Container {container} has unpaused.')
+            if container not in known_containers:
+                continue
             known_containers[container]['status'] = 'running'
             known_containers[container]['state'] = 'on'
 
