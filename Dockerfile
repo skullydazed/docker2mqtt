@@ -1,15 +1,25 @@
-FROM debian:stable
-ENV LC_ALL=C.UTF-8
-ENV LANG=C.UTF-8
+FROM python:3.12-slim
 
-# Pre-reqs
-RUN apt update && \
-    apt install --no-install-recommends -y apt-transport-https ca-certificates curl gnupg gnupg-agent software-properties-common && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - && \
-    add-apt-repository "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian $(lsb_release -cs) stable" && \
-    apt update && \
-    apt install --no-install-recommends -y docker-ce-cli python3-paho-mqtt && \
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install docker-ce-cli
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y ca-certificates curl gnupg && \
+    install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | \
+        gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+        https://download.docker.com/linux/debian \
+        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+        > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-get install --no-install-recommends -y docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt /
+RUN pip install --no-cache-dir -r /requirements.txt
 
 # Copy files into place
 COPY docker2mqtt /
