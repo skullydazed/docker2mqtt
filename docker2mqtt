@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Listens to `docker system events` and sents container stop/start events to mqtt.
-"""
+"""Listens to `docker system events` and sents container stop/start events to mqtt."""
+
 import atexit
 import json
 import queue
 import re
 from os import environ
 from socket import gethostname
-from subprocess import run, Popen, PIPE
+from subprocess import PIPE, Popen, run
 from threading import Thread
 from time import sleep, time
 
 import paho.mqtt.client
 
 DEBUG = environ.get('DEBUG', '0') == '1'
-DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24*60*60))
+DESTROYED_CONTAINER_TTL = int(environ.get('DESTROYED_CONTAINER_TTL', 24 * 60 * 60))
 HOMEASSISTANT_PREFIX = environ.get('HOMEASSISTANT_PREFIX', 'homeassistant')
 DOCKER2MQTT_HOSTNAME = environ.get('DOCKER2MQTT_HOSTNAME', gethostname())
 MQTT_CLIENT_ID = environ.get('MQTT_CLIENT_ID', 'docker2mqtt')
@@ -25,9 +25,15 @@ MQTT_PORT = int(environ.get('MQTT_PORT', '1883'))
 MQTT_TIMEOUT = int(environ.get('MQTT_TIMEOUT', '30'))
 MQTT_TOPIC_PREFIX = environ.get('MQTT_TOPIC_PREFIX', 'docker')
 MQTT_QOS = int(environ.get('MQTT_QOS', 1))
-DOCKER2MQTT_ALLOWLIST = [label.strip() for label in environ.get('DOCKER2MQTT_ALLOWLIST', '').split(',') if label.strip()]
-DOCKER2MQTT_DENYLIST = [label.strip() for label in environ.get('DOCKER2MQTT_DENYLIST', '').split(',') if label.strip()]
-DISCOVERY_TOPIC = f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
+DOCKER2MQTT_ALLOWLIST = [
+    label.strip() for label in environ.get('DOCKER2MQTT_ALLOWLIST', '').split(',') if label.strip()
+]
+DOCKER2MQTT_DENYLIST = [
+    label.strip() for label in environ.get('DOCKER2MQTT_DENYLIST', '').split(',') if label.strip()
+]
+DISCOVERY_TOPIC = (
+    f'{HOMEASSISTANT_PREFIX}/binary_sensor/{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}_{{}}/config'
+)
 WATCHED_EVENTS = ('create', 'destroy', 'die', 'pause', 'rename', 'start', 'stop', 'unpause')
 
 known_containers = {}
@@ -39,11 +45,12 @@ invalid_ha_topic_chars = re.compile(r'[^a-zA-Z0-9_-]')
 
 @atexit.register
 def mqtt_disconnect():
-    """Called by atexit to make sure we send our last_will message.
-    """
+    """Called by atexit to make sure we send our last_will message."""
     if 'mqtt' not in globals():
         return
-    mqtt.publish(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
+    mqtt.publish(
+        f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True
+    )
     mqtt.disconnect()
     sleep(1)
     mqtt.loop_stop()
@@ -60,12 +67,13 @@ def mqtt_send(topic, payload, retain=False):
 
 
 def register_container(container_entry):
-    """
-    """
+    """ """
     known_containers[container_entry['name']] = container_entry
-    registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container_entry['name']))
+    registration_topic = DISCOVERY_TOPIC.format(
+        invalid_ha_topic_chars.sub('_', container_entry['name'])
+    )
     registration_packet = {
-        'name': f"{MQTT_TOPIC_PREFIX.title()} {container_entry['name']}",
+        'name': f'{MQTT_TOPIC_PREFIX.title()} {container_entry["name"]}',
         'unique_id': f'{MQTT_TOPIC_PREFIX}_{DOCKER2MQTT_HOSTNAME}_{invalid_ha_topic_chars.sub("_", container_entry["name"])}',
         'availability_topic': f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status',
         'payload_available': 'online',
@@ -79,7 +87,11 @@ def register_container(container_entry):
         'qos': MQTT_QOS,
     }
     mqtt_send(registration_topic, json.dumps(registration_packet), retain=True)
-    mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}', json.dumps(container_entry), retain=True)
+    mqtt_send(
+        f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container_entry["name"]}',
+        json.dumps(container_entry),
+        retain=True,
+    )
 
 
 def parse_labels(labels_str):
@@ -133,8 +145,7 @@ def container_is_allowed(labels):
 
 
 def readline_thread():
-    """Run docker events and continually read lines from it.
-    """
+    """Run docker events and continually read lines from it."""
     with Popen(docker_events_cmd, stdout=PIPE, text=True) as proc:
         while True:
             line = proc.stdout.readline()
@@ -147,7 +158,9 @@ if __name__ == '__main__':
     # Setup MQTT
     mqtt = paho.mqtt.client.Client(client_id=MQTT_CLIENT_ID)
     mqtt.username_pw_set(username=MQTT_USER, password=MQTT_PASSWD)
-    mqtt.will_set(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True)
+    mqtt.will_set(
+        f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/status', 'offline', qos=MQTT_QOS, retain=True
+    )
     try:
         mqtt.connect(MQTT_HOST, MQTT_PORT, MQTT_TIMEOUT)
     except Exception as e:
@@ -178,12 +191,14 @@ if __name__ == '__main__':
             status_str = 'stopped'
             state_str = 'off'
 
-        register_container({
-            'name': container_status['Names'],
-            'image': container_status['Image'],
-            'status': status_str,
-            'state': state_str
-        })
+        register_container(
+            {
+                'name': container_status['Names'],
+                'image': container_status['Image'],
+                'status': status_str,
+                'state': state_str,
+            }
+        )
 
     # Start the docker events thread
     docker_events = queue.Queue()
@@ -196,9 +211,13 @@ if __name__ == '__main__':
         for container, destroyed_at in pending_destroy_operations.copy().items():
             if time() - destroyed_at > DESTROYED_CONTAINER_TTL:
                 print(f'Removing container {container} from MQTT.')
-                registration_topic = DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', container))
+                registration_topic = DISCOVERY_TOPIC.format(
+                    invalid_ha_topic_chars.sub('_', container)
+                )
                 mqtt_send(registration_topic, '', retain=True)
-                mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', '', retain=True)
+                mqtt_send(
+                    f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', '', retain=True
+                )
                 del pending_destroy_operations[container]
 
         # Collect and process an event from `docker events`
@@ -234,12 +253,9 @@ if __name__ == '__main__':
             if not container_is_allowed(labels):
                 continue
 
-            register_container({
-                'name': container,
-                'image': event['from'],
-                'status': 'created',
-                'state': 'off'
-            })
+            register_container(
+                {'name': container, 'image': event['from'], 'status': 'created', 'state': 'off'}
+            )
 
         elif event['status'] == 'destroy':
             # Add this container to pending_destroy_operations.
@@ -271,14 +287,18 @@ if __name__ == '__main__':
             print(f'Container {old_name} renamed to {container}.')
             if old_name not in known_containers:
                 continue
-            mqtt_send(DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', old_name)), '', retain=True)
+            mqtt_send(
+                DISCOVERY_TOPIC.format(invalid_ha_topic_chars.sub('_', old_name)), '', retain=True
+            )
             mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{old_name}', '', retain=True)
-            register_container({
-                'name': container,
-                'image': known_containers[old_name]['image'],
-                'status': known_containers[old_name]['status'],
-                'state': known_containers[old_name]['state']
-            })
+            register_container(
+                {
+                    'name': container,
+                    'image': known_containers[old_name]['image'],
+                    'status': known_containers[old_name]['status'],
+                    'state': known_containers[old_name]['state'],
+                }
+            )
             del known_containers[old_name]
 
         elif event['status'] == 'start':
@@ -306,4 +326,8 @@ if __name__ == '__main__':
             # Don't send an MQTT packet if nothing has changed
             continue
 
-        mqtt_send(f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}', json.dumps(known_containers[container]), retain=True)
+        mqtt_send(
+            f'{MQTT_TOPIC_PREFIX}/{DOCKER2MQTT_HOSTNAME}/{container}',
+            json.dumps(known_containers[container]),
+            retain=True,
+        )

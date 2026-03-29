@@ -1,3 +1,4 @@
 DOCKER_RUN
 .note
 __pycache__
+.venv
